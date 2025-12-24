@@ -6,75 +6,85 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body { margin:0; padding:0; }
-    #map { height: 100vh; }
-    .info { padding: 6px 8px; background: white; background: rgba(255,255,255,0.8); box-shadow: 0 0 15px rgba(0,0,0,0.2); border-radius: 5px; }
-    .legend { line-height: 18px; color: #555; background: white; padding: 6px 8px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
-    .legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.3; }
+    #container { display: flex; height: 100vh; }
+    #map1, #map2 { flex: 1; }
+    .info, .legend {
+      padding: 6px 8px;
+      background: white;
+      border-radius: 5px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.7;
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <div id="container">
+    <div id="map1"></div>
+    <div id="map2"></div>
+  </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
   <script>
-    // 1️⃣ Create the map
-    var map = L.map('map').setView([34.7, -86.6], 11); // Centered on Madison County, adjust if needed
+    // --- 1️⃣ Create two maps ---
+    var map1 = L.map('map1').setView([34.7, -86.6], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map1);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+    var map2 = L.map('map2').setView([34.7, -86.6], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map2);
 
-    // 2️⃣ Load CSV
+    // --- 2️⃣ Synchronize maps ---
+    function syncMaps(sourceMap, targetMap) {
+      sourceMap.on('move', function() {
+        targetMap.setView(sourceMap.getCenter(), sourceMap.getZoom(), { animate: false });
+      });
+    }
+    syncMaps(map1, map2);
+    syncMaps(map2, map1);
+
+    // --- 3️⃣ Load CSV and GeoJSON for choropleth ---
     Papa.parse('Sex by Age - Truncated Cleaned.csv', {
       download: true,
       header: true,
       complete: function(csvData) {
-        const data = csvData.data; // array of rows
+        const data = csvData.data;
 
-        // 3️⃣ Load GeoJSON
         fetch('Madison County Block Groups.geojson')
           .then(res => res.json())
           .then(geojson => {
 
-            // 4️⃣ Merge CSV values into GeoJSON
+            // Merge population from CSV into GeoJSON
             geojson.features.forEach(f => {
               const id = f.properties.GEOIDFQ;
               const row = data.find(d => d.Geography === id);
-              if (row) {
-                f.properties.totalPop = parseInt(row["Total Population"]) || 0;
-              } else {
-                f.properties.totalPop = 0;
-              }
+              f.properties.totalPop = row ? parseInt(row["Total Population"]) || 0 : 0;
             });
-            
-// 5️⃣ Create green → blue color scale with transparency
-function getColor(d) {
-  return d > 5000 ? 'rgba(0, 0, 128, 0.6)' :   // dark blue
-         d > 3000 ? 'rgba(0, 0, 255, 0.6)' :   // blue
-         d > 2000 ? 'rgba(0, 128, 255, 0.6)' : // lighter blue
-         d > 1000 ? 'rgba(0, 255, 255, 0.6)' : // cyan
-         d > 500  ? 'rgba(0, 255, 128, 0.6)' : // greenish cyan
-         d > 200  ? 'rgba(0, 255, 0, 0.6)' :   // green
-         d > 100  ? 'rgba(128, 255, 0, 0.6)' : // yellow-green
-                    'rgba(192, 255, 128, 0.6)'; // light green
-}
 
-function style(feature) {
-  return {
-    fillColor: getColor(feature.properties.totalPop),
-    weight: 1,
-    opacity: 1,       // polygon border
-    color: 'white',   // border color
-    fillOpacity: 0.6  // transparency
-  };
-}
+            // Color scale
+            function getColor(d) {
+              return d > 5000 ? '#800026' :
+                     d > 3000 ? '#BD0026' :
+                     d > 2000 ? '#E31A1C' :
+                     d > 1000 ? '#FC4E2A' :
+                     d > 500  ? '#FD8D3C' :
+                     d > 200  ? '#FEB24C' :
+                     d > 100  ? '#FED976' :
+                                '#FFEDA0';
+            }
 
+            function style(feature) {
+              return { fillColor: getColor(feature.properties.totalPop), weight: 1, color: 'white', fillOpacity: 0.7 };
+            }
 
-            // 6️⃣ Add interactivity
             function onEachFeature(feature, layer) {
-              if (feature.properties && feature.properties.totalPop != null) {
+              if (feature.properties.totalPop != null) {
                 layer.bindTooltip(
                   "<b>GEOID:</b> " + feature.properties.GEOIDFQ + "<br>" +
                   "<b>Total Population:</b> " + feature.properties.totalPop
@@ -82,16 +92,14 @@ function style(feature) {
               }
             }
 
-            L.geoJSON(geojson, { style: style, onEachFeature: onEachFeature }).addTo(map);
+            // Add choropleth to map2
+            L.geoJSON(geojson, { style: style, onEachFeature: onEachFeature }).addTo(map2);
 
-            // 7️⃣ Add legend
+            // Legend for choropleth
             var legend = L.control({position: 'bottomright'});
-
             legend.onAdd = function(map) {
               var div = L.DomUtil.create('div', 'legend'),
-                  grades = [0, 100, 200, 500, 1000, 2000, 3000, 5000],
-                  labels = [];
-
+                  grades = [0, 100, 200, 500, 1000, 2000, 3000, 5000];
               for (var i = 0; i < grades.length; i++) {
                 div.innerHTML +=
                   '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
@@ -99,8 +107,7 @@ function style(feature) {
               }
               return div;
             };
-
-            legend.addTo(map);
+            legend.addTo(map2);
 
           });
       }
