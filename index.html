@@ -48,28 +48,29 @@
                 f.properties.totalPop = 0;
               }
             });
+            
+// 5️⃣ Create green → blue color scale with transparency
+function getColor(d) {
+  return d > 5000 ? 'rgba(0, 0, 128, 0.6)' :   // dark blue
+         d > 3000 ? 'rgba(0, 0, 255, 0.6)' :   // blue
+         d > 2000 ? 'rgba(0, 128, 255, 0.6)' : // lighter blue
+         d > 1000 ? 'rgba(0, 255, 255, 0.6)' : // cyan
+         d > 500  ? 'rgba(0, 255, 128, 0.6)' : // greenish cyan
+         d > 200  ? 'rgba(0, 255, 0, 0.6)' :   // green
+         d > 100  ? 'rgba(128, 255, 0, 0.6)' : // yellow-green
+                    'rgba(192, 255, 128, 0.6)'; // light green
+}
 
-            // 5️⃣ Create color scale
-            function getColor(d) {
-              return d > 5000 ? '#800026' :
-                     d > 3000 ? '#BD0026' :
-                     d > 2000 ? '#E31A1C' :
-                     d > 1000 ? '#FC4E2A' :
-                     d > 500  ? '#FD8D3C' :
-                     d > 200  ? '#FEB24C' :
-                     d > 100  ? '#FED976' :
-                                '#FFEDA0';
-            }
+function style(feature) {
+  return {
+    fillColor: getColor(feature.properties.totalPop),
+    weight: 1,
+    opacity: 1,       // polygon border
+    color: 'white',   // border color
+    fillOpacity: 0.6  // transparency
+  };
+}
 
-            function style(feature) {
-              return {
-                fillColor: getColor(feature.properties.totalPop),
-                weight: 1,
-                opacity: 1,
-                color: 'white',
-                fillOpacity: 0.3
-              };
-            }
 
             // 6️⃣ Add interactivity
             function onEachFeature(feature, layer) {
