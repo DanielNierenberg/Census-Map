@@ -1,109 +1,75 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Madison County Census Map</title>
+  <title>Huntsville Map - Residential Buildings</title>
   <meta charset="utf-8" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body { margin:0; padding:0; }
     #map { height: 100vh; }
-    .info { padding: 6px 8px; background: white; background: rgba(255,255,255,0.8); box-shadow: 0 0 15px rgba(0,0,0,0.2); border-radius: 5px; }
-    .legend { line-height: 18px; color: #555; background: white; padding: 6px 8px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
-    .legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
   <script>
     // 1️⃣ Create the map
-    var map = L.map('map').setView([34.7, -86.6], 11); // Centered on Madison County, adjust if needed
+    var map = L.map('map').setView([34.7304, -86.5861], 12); // Huntsville center
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19
     }).addTo(map);
 
-    // 2️⃣ Load CSV
-    Papa.parse('Sex by Age - Truncated Cleaned.csv', {
-      download: true,
-      header: true,
-      complete: function(csvData) {
-        const data = csvData.data; // array of rows
-
-        // 3️⃣ Load GeoJSON
-        fetch('Madison County Block Groups.geojson')
-          .then(res => res.json())
-          .then(geojson => {
-
-            // 4️⃣ Merge CSV values into GeoJSON
-            geojson.features.forEach(f => {
-              const id = f.properties.GEOIDFQ;
-              const row = data.find(d => d.Geography === id);
-              if (row) {
-                f.properties.totalPop = parseInt(row["Total Population"]) || 0;
-              } else {
-                f.properties.totalPop = 0;
-              }
-            });
-
-            // 5️⃣ Create color scale
-            function getColor(d) {
-              return d > 5000 ? '#800026' :
-                     d > 3000 ? '#BD0026' :
-                     d > 2000 ? '#E31A1C' :
-                     d > 1000 ? '#FC4E2A' :
-                     d > 500  ? '#FD8D3C' :
-                     d > 200  ? '#FEB24C' :
-                     d > 100  ? '#FED976' :
-                                '#FFEDA0';
+    // 2️⃣ Load Block Groups GeoJSON (black outlines, no fill) with tooltip
+    fetch('Huntsville_Block_Groups.geojson')
+      .then(res => res.json())
+      .then(geojson => {
+        L.geoJSON(geojson, {
+          style: {
+            color: 'black',
+            weight: 2,
+            fillOpacity: 0
+          },
+          onEachFeature: function(feature, layer) {
+            if(feature.properties) {
+              layer.bindTooltip(
+                "<b>Block Group:</b> " + feature.properties.NAMELSAD + "<br>" +
+                "<b>GEOID:</b> " + feature.properties.GEOIDFQ
+              );
             }
+          }
+        }).addTo(map);
+      });
 
-            function style(feature) {
-              return {
-                fillColor: getColor(feature.properties.totalPop),
-                weight: 1,
-                opacity: 1,
-                color: 'white',
-                fillOpacity: 0.7
-              };
-            }
-
-            // 6️⃣ Add interactivity
-            function onEachFeature(feature, layer) {
-              if (feature.properties && feature.properties.totalPop != null) {
+    // 3️⃣ Function to load residential buildings with tooltip
+    function loadBuildings(url) {
+      fetch(url)
+        .then(res => res.json())
+        .then(geojson => {
+          L.geoJSON(geojson, {
+            style: {
+              color: 'darkgreen',
+              weight: 1,
+              fillOpacity: 0.7
+            },
+            onEachFeature: function(feature, layer) {
+              if(feature.properties) {
                 layer.bindTooltip(
                   "<b>GEOID:</b> " + feature.properties.GEOIDFQ + "<br>" +
-                  "<b>Total Population:</b> " + feature.properties.totalPop
+                  "<b>Zone:</b> " + feature.properties.ZoneLabel + "<br>" +
+                  "<b>City:</b> " + feature.properties.City
                 );
               }
             }
+          }).addTo(map);
+        });
+    }
 
-            L.geoJSON(geojson, { style: style, onEachFeature: onEachFeature }).addTo(map);
-
-            // 7️⃣ Add legend
-            var legend = L.control({position: 'bottomright'});
-
-            legend.onAdd = function(map) {
-              var div = L.DomUtil.create('div', 'legend'),
-                  grades = [0, 100, 200, 500, 1000, 2000, 3000, 5000],
-                  labels = [];
-
-              for (var i = 0; i < grades.length; i++) {
-                div.innerHTML +=
-                  '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
-                  grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
-              }
-              return div;
-            };
-
-            legend.addTo(map);
-
-          });
-      }
-    });
+    // 4️⃣ Load both residential building GeoJSONs
+    loadBuildings('Huntsville Residential Buildings Part1.geojson');
+    loadBuildings('Huntsville Residential Buildings Part2.geojson');
   </script>
 </body>
 </html>
