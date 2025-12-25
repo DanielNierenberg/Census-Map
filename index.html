@@ -43,19 +43,22 @@
         }).addTo(map);
       });
 
-    // 3️⃣ Load City Boundary GeoJSON as filled light orange
-    fetch('Boundary_City_Huntsville_poly.geojson')
-      .then(res => res.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {
-          style: {
-            color: 'orange',        // border color
-            weight: 2,              // border thickness
-            fillColor: 'orange',    // fill color
-            fillOpacity: 0.3        // light fill
-          }
-        }).addTo(map);
-      });
+ // 3️⃣ Load City Boundary GeoJSON as filled light orange and auto-zoom
+fetch('Boundary_City_Huntsville_poly.geojson')
+  .then(res => res.json())
+  .then(geojson => {
+    var cityLayer = L.geoJSON(geojson, {
+      style: {
+        color: 'orange',        // border color
+        weight: 2,              // border thickness
+        fillColor: 'orange',    // fill color
+        fillOpacity: 0.3        // light fill
+      }
+    }).addTo(map);
+
+    // Auto-zoom map to city boundary
+    map.fitBounds(cityLayer.getBounds());
+  });
 
     // 4️⃣ Function to load residential buildings with tooltip
     function loadBuildings(url) {
