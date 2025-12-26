@@ -1,126 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Huntsville Map - Residential Buildings</title>
-  <meta charset="utf-8" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    body { margin:0; padding:0; }
-    #map { height: 100vh; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Huntsville Map - Residential Buildings</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <style>
+        /* Remove default margins and make map full viewport height */
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
+    <!-- Map container -->
+    <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
-  <script src="https://unpkg.com/rbush/rbush.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // 1️⃣ Initialize the map centered on Huntsville
+        const map = L.map('map').setView([34.7304, -86.5861], 12);
 
-  <script>
-    var map = L.map('map').setView([34.7304, -86.5861], 12);
+        // 2️⃣ Add OpenStreetMap tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+        // 3️⃣ Load Block Groups GeoJSON (black outlines, no fill) with tooltip
+        fetch('Huntsville_Block_Groups.geojson')
+            .then(res => res.json())
+            .then(geojson => {
+                L.geoJSON(geojson, {
+                    style: { color: 'black', weight: 2, fillOpacity: 0 },
+                    onEachFeature: (feature, layer) => {
+                        if (feature.properties) {
+                            layer.bindTooltip(
+                                `<b>Block Group:</b> ${feature.properties.NAMELSAD}<br>` +
+                                `<b>GEOID:</b> ${feature.properties.GEOIDFQ}`
+                            );
+                        }
+                    }
+                }).addTo(map);
+            });
 
-    const addBuildings = (features, color) => {
-      L.geoJSON({type: "FeatureCollection", features}, {
-        style: {
-          color: color,
-          weight: 1,
-          fillColor: color,
-          fillOpacity: 0.7
-        },
-        onEachFeature: function(feature, layer) {
-          if(feature.properties) {
-            layer.bindTooltip(
-              "<b>GEOID:</b> " + feature.properties.GEOIDFQ + "<br>" +
-              "<b>Zone:</b> " + feature.properties.ZoneLabel + "<br>" +
-              "<b>City:</b> " + feature.properties.City
-            );
-          }
+        // 4️⃣ Load City Boundary GeoJSON as light orange fill and auto-zoom
+        fetch('Boundary_City_Huntsville_poly.geojson')
+            .then(res => res.json())
+            .then(geojson => {
+                const cityLayer = L.geoJSON(geojson, {
+                    style: {
+                        color: 'orange',       // border color
+                        weight: 2,             // border thickness
+                        fillColor: 'orange',   // fill color
+                        fillOpacity: 0.3       // light fill
+                    }
+                }).addTo(map);
+
+                // Auto-zoom to city boundary
+                map.fitBounds(cityLayer.getBounds());
+            });
+
+        // 5️⃣ Function to load residential buildings with tooltip
+        function loadBuildings(url) {
+            fetch(url)
+                .then(res => res.json())
+                .then(geojson => {
+                    L.geoJSON(geojson, {
+                        style: { color: 'darkgreen', weight: 1, fillOpacity: 0.7 },
+                        onEachFeature: (feature, layer) => {
+                            if (feature.properties) {
+                                layer.bindTooltip(
+                                    `<b>GEOID:</b> ${feature.properties.GEOIDFQ}<br>` +
+                                    `<b>Zone:</b> ${feature.properties.ZoneLabel}<br>` +
+                                    `<b>City:</b> ${feature.properties.City}`
+                                );
+                            }
+                        }
+                    }).addTo(map);
+                });
         }
-      }).addTo(map);
-    };
 
-    // Function to prepare R-tree index
-    const buildSpatialIndex = (features) => {
-      const tree = new rbush();
-      const items = features.map(f => {
-        const bbox = turf.bbox(f); // [minX, minY, maxX, maxY]
-        return {
-          minX: bbox[0],
-          minY: bbox[1],
-          maxX: bbox[2],
-          maxY: bbox[3],
-          feature: f
-        };
-      });
-      tree.load(items);
-      return tree;
-    };
+        // 6️⃣ Load both residential building GeoJSON files
+        loadBuildings('Huntsville Residential Buildings Part1.geojson');
+        loadBuildings('Huntsville Residential Buildings Part2.geojson');
 
-    // Load all GeoJSONs in parallel
-    Promise.all([
-      fetch('Huntsville Residential Buildings Part1.geojson').then(r => r.json()),
-      fetch('Huntsville Residential Buildings Part2.geojson').then(r => r.json()),
-      fetch('OSMCombinedUnique_with_GEOIDFQ.geojson').then(r => r.json()),
-      fetch('Huntsville_Block_Groups.geojson').then(r => r.json()),
-      fetch('Boundary_City_Huntsville_poly.geojson').then(r => r.json())
-    ]).then(([resBld1, resBld2, osmBld, blockGroups, cityBoundary]) => {
-
-      // Combine all buildings
-      const allBuildings = [...resBld1.features, ...resBld2.features, ...osmBld.features];
-
-      // Add buildings to map
-      addBuildings(resBld1.features, 'darkgreen');
-      addBuildings(resBld2.features, 'darkgreen');
-      addBuildings(osmBld.features, 'darkred');
-
-      // Build spatial index
-      const tree = buildSpatialIndex(allBuildings);
-
-      // Filter block groups efficiently using bounding box first
-      const filteredBlocks = blockGroups.features.filter(block => {
-        const bbox = turf.bbox(block);
-        const candidates = tree.search({
-          minX: bbox[0],
-          minY: bbox[1],
-          maxX: bbox[2],
-          maxY: bbox[3]
-        });
-        // Check precise intersection only with candidates
-        return candidates.some(item => turf.booleanIntersects(block, item.feature));
-      });
-
-      // Add filtered block groups
-      L.geoJSON({type: "FeatureCollection", features: filteredBlocks}, {
-        style: {
-          color: 'black',
-          weight: 2,
-          fillOpacity: 0
-        },
-        onEachFeature: function(feature, layer) {
-          if(feature.properties) {
-            layer.bindTooltip(
-              "<b>Block Group:</b> " + feature.properties.NAMELSAD + "<br>" +
-              "<b>GEOID:</b> " + feature.properties.GEOIDFQ
-            );
-          }
-        }
-      }).addTo(map);
-
-      // Add city boundary and zoom
-      const cityLayer = L.geoJSON(cityBoundary, {
-        style: {
-          color: 'orange',
-          weight: 2,
-          fillColor: 'orange',
-          fillOpacity: 0.3
-        }
-      }).addTo(map);
-      map.fitBounds(cityLayer.getBounds());
-    });
-  </script>
+        // 7️⃣ Load OSM-only buildings as dark red
+        fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
+            .then(res => res.json())
+            .then(geojson => {
+                L.geoJSON(geojson, {
+                    style: { color: 'darkred', weight: 1, fillColor: 'darkred', fillOpacity: 0.7 },
+                    onEachFeature: (feature, layer) => {
+                        if (feature.properties) {
+                            layer.bindTooltip(
+                                `<b>GEOID:</b> ${feature.properties.GEOIDFQ}<br>` +
+                                `<b>Zone:</b> ${feature.properties.ZoneLabel}<br>` +
+                                `<b>City:</b> ${feature.properties.City}`
+                            );
+                        }
+                    }
+                }).addTo(map);
+            });
+    </script>
 </body>
 </html>
