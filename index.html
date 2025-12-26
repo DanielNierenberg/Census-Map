@@ -23,7 +23,7 @@
     }).addTo(map);
 
     // 2️⃣ Load Block Groups GeoJSON (black outlines, no fill) with tooltip
-    fetch('Huntsville_Block_Groups.geojson')
+    fetch('Madison County Block Groups.geojson')
       .then(res => res.json())
       .then(geojson => {
         L.geoJSON(geojson, {
