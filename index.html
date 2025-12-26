@@ -89,7 +89,7 @@ fetch('Boundary_City_Huntsville_poly.geojson')
     loadBuildings('Huntsville Residential Buildings Part2.geojson');
 
     // 6️⃣ Load OSM-only buildings as dark red
-fetch('OSM_only_buildings_4326.geojson')
+fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
   .then(res => res.json())
   .then(geojson => {
     L.geoJSON(geojson, {
