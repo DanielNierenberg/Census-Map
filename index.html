@@ -87,6 +87,29 @@ fetch('Boundary_City_Huntsville_poly.geojson')
     // 5️⃣ Load both residential building GeoJSONs
     loadBuildings('Huntsville Residential Buildings Part1.geojson');
     loadBuildings('Huntsville Residential Buildings Part2.geojson');
+
+    // 6️⃣ Load OSM-only buildings as dark red
+fetch('OSM_only_buildings_4326.geojson')
+  .then(res => res.json())
+  .then(geojson => {
+    L.geoJSON(geojson, {
+      style: {
+        color: 'darkred',      // border color (dark red too)
+        weight: 1,             // border thickness
+        fillColor: 'darkred',  // fill color
+        fillOpacity: 0.7       // opacity
+      },
+      onEachFeature: function(feature, layer) {
+        if(feature.properties) {
+          layer.bindTooltip(
+            "<b>GEOID:</b> " + feature.properties.GEOIDFQ + "<br>" +
+            "<b>Zone:</b> " + feature.properties.ZoneLabel + "<br>" +
+            "<b>City:</b> " + feature.properties.City
+          );
+        }
+      }
+    }).addTo(map);
+  });
   </script>
 </body>
 </html>
