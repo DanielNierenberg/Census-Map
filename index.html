@@ -2,43 +2,51 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Address Search</title>
+    <title>Huntsville Map - Organized Layout</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     <style>
         body { margin:0; padding:0; font-family: sans-serif; }
         #map { height: 100vh; }
-        #status-panel {
-            position: absolute; top: 10px; right: 60px; z-index: 1000;
-            background: white; padding: 15px; border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
-        }
-        /* Style for the Search Bar */
-        #search-container {
-            position: absolute; top: 140px; right: 10px; z-index: 1000;
-            background: white; padding: 8px; border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            display: flex; gap: 5px;
-        }
-        #address-input { width: 200px; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
-        #go-btn { padding: 5px 10px; cursor: pointer; background: #3388ff; color: white; border: none; border-radius: 3px; font-weight: bold; }
         
-        .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
-        .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
+        /* 1. STATUS PANEL (Top Right) */
+        #status-panel {
+            position: absolute; top: 10px; right: 10px; z-index: 1001;
+            background: white; padding: 12px; border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
+            width: 200px; text-align: center;
+        }
+        .count-num { font-size: 2em; color: #2d3436; font-weight: bold; display: block; }
+        .label { font-size: 0.75em; color: #636e72; text-transform: uppercase; font-weight: bold; }
+
+        /* 2. SEARCH BOX (Stacked below status panel) */
+        .search-box-container {
+            background: white; padding: 10px; border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            margin-top: 135px; /* Adjust this if the status panel height changes */
+            width: 204px;
+        }
+        #roadSearch { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .btn-row { display: flex; gap: 5px; }
+        .btn-row button { flex: 1; cursor: pointer; padding: 6px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; }
+        .btn-row button:hover { background: #e9ecef; }
+
+        /* 3. AUTOCOMPLETE SUGGESTIONS */
+        .suggestions {
+            position: absolute; background: white; border: 1px solid #ccc;
+            max-height: 180px; overflow-y: auto; z-index: 1005;
+            display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .suggestions div { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
+        .suggestions div:hover { background-color: #f0f0f0; }
     </style>
 </head>
 <body>
 
     <div id="status-panel">
-        <div id="load-status">⏳ Loading Data...</div>
-        <span class="label">Buildings Inside Shape:</span>
+        <div id="load-status">⏳ Loading...</div>
+        <span class="label">Buildings Inside Shape</span>
         <span id="count-display" class="count-num">0</span>
-    </div>
-
-    <div id="search-container">
-        <input type="text" id="address-input" list="address-suggestions" placeholder="Search Huntsville address...">
-        <datalist id="address-suggestions"></datalist>
-        <button id="go-btn">GO</button>
     </div>
 
     <div id="map"></div>
@@ -49,92 +57,35 @@
 
     <script>
     (async function() {
+        // --- INITIALIZE MAP ---
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const buildingsLayer = L.layerGroup().addTo(map);
         const drawnItems = new L.FeatureGroup().addTo(map);
-        const searchMarkerLayer = L.layerGroup().addTo(map); // For the red pin
         let allBuildings = [];
+        const bbox = "34.509,-86.802,34.880,-86.383";
 
-        // Huntsville Bounds for Search (Lon/Lat: MinX, MinY, MaxX, MaxY)
-        const HUNTSVILLE_VIEWBOX = "-86.8,34.5,-86.3,34.9";
-
-        // Load Data
+        // --- DATA LOADING ---
         try {
-            const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
-
+            fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json()).then(data => {
+                L.geoJSON(data, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
+            });
             const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
             for (const f of files) {
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
             }
             document.getElementById('load-status').innerHTML = "✅ Ready";
-        } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error Loading Files"; }
+        } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error"; }
 
-        // --- SEARCH LOGIC ---
-        const input = document.getElementById('address-input');
-        const list = document.getElementById('address-suggestions');
-        const goBtn = document.getElementById('go-btn');
-
-        // Handle typing (Autocomplete)
-        input.addEventListener('input', async (e) => {
-            const val = e.target.value;
-            if (val.length < 3) return; // Wait for 3 chars
-
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&viewbox=${HUNTSVILLE_VIEWBOX}&bounded=1&limit=5`;
-            
-            try {
-                const response = await fetch(url);
-                const results = await response.json();
-                list.innerHTML = ''; // Clear old suggestions
-                results.forEach(item => {
-                    const option = document.createElement('option');
-                    option.value = item.display_name;
-                    // Store lat/lon in data attributes
-                    option.dataset.lat = item.lat;
-                    option.dataset.lon = item.lon;
-                    list.appendChild(option);
-                });
-            } catch (err) { console.error("Search error", err); }
-        });
-
-        // Handle "Go" Click
-        goBtn.onclick = () => {
-            const val = input.value;
-            const options = Array.from(list.options);
-            const match = options.find(opt => opt.value === val);
-
-            if (match) {
-                const lat = match.dataset.lat;
-                const lon = match.dataset.lon;
-                zoomToLocation(lat, lon);
-            } else {
-                // If they didn't pick from list, try a direct search
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&viewbox=${HUNTSVILLE_VIEWBOX}&bounded=1&limit=1`;
-                fetch(url).then(res => res.json()).then(data => {
-                    if (data.length > 0) zoomToLocation(data[0].lat, data[0].lon);
-                });
-            }
-        };
-
-        function zoomToLocation(lat, lon) {
-            searchMarkerLayer.clearLayers();
-            const coords = [parseFloat(lat), parseFloat(lon)];
-            map.flyTo(coords, 17);
-            L.marker(coords).addTo(searchMarkerLayer)
-                .bindPopup("Searched Location").openPopup();
-        }
-
-        // --- EXISTING LOGIC ---
+        // --- BUILDING SEARCH ---
         function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
             const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
             const results = allBuildings.filter(building => {
                 const bBox = turf.bboxPolygon(turf.bbox(building));
-                if (!turf.booleanIntersects(searchBbox, bBox)) return false;
-                return turf.booleanIntersects(building, filterShape);
+                return turf.booleanIntersects(searchBbox, bBox) && turf.booleanIntersects(building, filterShape);
             });
             document.getElementById('count-display').innerText = results.length.toLocaleString();
             if (results.length > 0) {
@@ -145,7 +96,86 @@
             }
         }
 
+        // --- SEARCH CONTROL (Positioned Right Side) ---
+        const searchControl = L.control({ position: 'topright' });
+        searchControl.onAdd = function() {
+            const div = L.DomUtil.create('div', 'search-box-container');
+            div.innerHTML = `<b>Locate Road</b><br>
+                <input type="text" id="roadSearch" placeholder="Enter street name..." autocomplete="off"/>
+                <div class="btn-row">
+                    <button id="searchBtn">Go</button>
+                    <button id="clearSearchBtn">Clear</button>
+                </div>`;
+            return div;
+        };
+        searchControl.addTo(map);
+
+        // --- AUTOCOMPLETE LOGIC ---
+        let allRoadNames = [];
+        fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json][timeout:25];way["highway"](${bbox});out tags;`))
+            .then(res => res.json())
+            .then(data => {
+                const names = new Set();
+                data.elements.forEach(el => { if (el.tags && el.tags.name) names.add(el.tags.name); });
+                allRoadNames = Array.from(names).sort();
+            });
+
+        const input = document.getElementById('roadSearch');
+        const suggestionBox = document.createElement('div');
+        suggestionBox.className = 'suggestions';
+        document.body.appendChild(suggestionBox);
+
+        function positionSuggestionBox() {
+            const rect = input.getBoundingClientRect();
+            suggestionBox.style.left = rect.left + 'px';
+            suggestionBox.style.top = rect.bottom + 'px';
+            suggestionBox.style.width = rect.width + 'px';
+        }
+
+        input.addEventListener('input', function() {
+            positionSuggestionBox();
+            const query = this.value.toLowerCase().trim();
+            suggestionBox.innerHTML = '';
+            if (!query) { suggestionBox.style.display = 'none'; return; }
+            const matches = allRoadNames.filter(name => name.toLowerCase().includes(query)).slice(0, 8);
+            matches.forEach(name => {
+                const div = document.createElement('div');
+                div.textContent = name;
+                div.onclick = () => { input.value = name; suggestionBox.style.display = 'none'; };
+                suggestionBox.appendChild(div);
+            });
+            suggestionBox.style.display = matches.length ? 'block' : 'none';
+        });
+
+        // Search Action
+        async function executeSearch() {
+            const roadName = input.value.trim();
+            if (!roadName) return;
+            const query = `[out:json][timeout:25];way["highway"]["name"~"${roadName}",i](${bbox});(._;>;);out body;`;
+            try {
+                const res = await fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query));
+                const data = await res.json();
+                const nodes = {};
+                data.elements.forEach(el => { if (el.type === "node") nodes[el.id] = [el.lat, el.lon]; });
+                const bounds = L.latLngBounds();
+                let found = false;
+                data.elements.forEach(el => {
+                    if (el.type === "way") {
+                        el.nodes.forEach(id => { if(nodes[id]){ bounds.extend(nodes[id]); found = true; } });
+                    }
+                });
+                if (found) map.fitBounds(bounds, { padding: [100, 100], maxZoom: 16 });
+                else alert("Road not found in Huntsville.");
+            } catch(e) { console.error("Search error", e); }
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', executeSearch);
+        input.addEventListener('keypress', e => { if(e.key === 'Enter') executeSearch(); });
+        document.getElementById('clearSearchBtn').addEventListener('click', () => { input.value = ''; });
+
+        // --- DRAWING TOOLS (EXPLICITLY LEFT) ---
         const drawControl = new L.Control.Draw({
+            position: 'topleft', // Fixed on the left
             draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
             edit: { featureGroup: drawnItems, remove: true }
         });
@@ -155,32 +185,29 @@
             drawnItems.clearLayers();
             const layer = e.layer;
             drawnItems.addLayer(layer);
-            let geoJSON;
-            if (layer instanceof L.Circle) {
-                const center = layer.getLatLng();
-                const radiusKms = layer.getRadius() / 1000;
-                geoJSON = turf.circle([center.lng, center.lat], radiusKms, {units: 'kilometers'});
-            } else {
-                geoJSON = layer.toGeoJSON();
-            }
+            let geoJSON = (layer instanceof L.Circle) 
+                ? turf.circle([layer.getLatLng().lng, layer.getLatLng().lat], layer.getRadius() / 1000, {units: 'kilometers'})
+                : layer.toGeoJSON();
             runBuildingSearch(geoJSON);
         });
 
+        // --- CLEANER (STACKED RIGHT) ---
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+            div.innerHTML = '<a href="#" title="Clear All Polygons" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;">🧹</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
                 drawnItems.clearLayers();
-                searchMarkerLayer.clearLayers();
-                input.value = '';
                 document.getElementById('count-display').innerText = "0";
             };
             return div;
         };
         cleaner.addTo(map);
+
+        window.addEventListener('resize', positionSuggestionBox);
+        document.addEventListener('click', e => { if (e.target !== input) suggestionBox.style.display = 'none'; });
 
     })();
     </script>
