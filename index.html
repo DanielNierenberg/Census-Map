@@ -85,8 +85,6 @@
             }
         }
 
-        // 3. Drawing Tools
-    // 3. Drawing Tools
 // 3. Drawing Tools
 const drawControl = new L.Control.Draw({
     draw: { 
@@ -96,10 +94,11 @@ const drawControl = new L.Control.Draw({
         polygon: true, 
         rectangle: true, 
         circle: true 
-    },
-    edit: false  // completely disables the edit toolbar (no buttons at all)
+    }
+    // no 'edit' option at all
 });
 map.addControl(drawControl);
+
 
         map.on('draw:created', function(e) {
             drawnItems.clearLayers(); // Clear old shapes
