@@ -184,6 +184,21 @@
         cleaner.addTo(map);
 
         // =====================
+        // Zoom Out Button
+        // =====================
+        const zoomOutControl = L.control({position: 'topright'});
+        zoomOutControl.onAdd = () => {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🔍➖</a>';
+            div.onclick = (e) => {
+                e.preventDefault();
+                map.setZoom(map.getZoom() - 1);
+            };
+            return div;
+        };
+        zoomOutControl.addTo(map);
+
+        // =====================
         // Address Search Feature
         // =====================
         let allAddresses = [];
@@ -200,6 +215,7 @@
         const searchInput = document.getElementById('address-search');
         const suggestionsList = document.getElementById('suggestions');
         const goButton = document.getElementById('go-button');
+        let currentMarker = null; // currently displayed search marker
         let selectedCoords = null;
 
         // Autocomplete
@@ -233,8 +249,19 @@
                 return;
             }
 
+            // Remove previous marker
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+
             map.setView(selectedCoords, 18);
-            L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 }).addTo(map);
+            
+            // Add new marker with tooltip
+            const addressName = searchInput.value;
+            currentMarker = L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 })
+                .addTo(map)
+                .bindTooltip(addressName, { permanent: true, direction: 'top', offset: [0, -10] })
+                .openTooltip();
         });
 
     })();
