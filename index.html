@@ -2,253 +2,131 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Minimal Draw with Search</title>
-
+    <title>Huntsville Map - Minimal Draw</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-
     <style>
         body { margin:0; padding:0; font-family: sans-serif; }
         #map { height: 100vh; }
-
-        /* Status Panel */
         #status-panel {
-            position: absolute;
-            top: 10px;
-            right: 60px;
-            z-index: 1000;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border: 2px solid #3388ff;
+            position: absolute; top: 10px; right: 60px; z-index: 1000;
+            background: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
         }
-
-        .count-num {
-            font-size: 2.2em;
-            color: #2d3436;
-            font-weight: bold;
-            display: block;
-        }
-
-        .label {
-            font-size: 0.8em;
-            color: #636e72;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        /* Search Panel — BELOW status panel */
-        #search-panel {
-            position: absolute;
-            top: 105px;              /* ← pushes below status panel */
-            right: 60px;
-            z-index: 1000;
-            background: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border: 2px solid #3388ff;
-            width: 260px;
-        }
-
-        #address-input {
-            width: 100%;
-            padding: 6px 8px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-        }
-
-        #go-btn {
-            margin-top: 6px;
-            width: 100%;
-            padding: 6px;
-            border-radius: 4px;
-            border: none;
-            background: #3388ff;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        #suggestions {
-            margin: 6px 0 0 0;
-            padding: 0;
-            list-style: none;
-            max-height: 160px;
-            overflow-y: auto;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: white;
-            display: none;
-        }
-
-        #suggestions li {
-            padding: 6px;
-            cursor: pointer;
-        }
-
-        #suggestions li:hover {
-            background: #f1f1f1;
-        }
-
-        /* Broom Button */
-        .leaflet-bar a {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: white;
-            width: 34px;
-            height: 34px;
-            text-decoration: none;
-            font-size: 18px;
-        }
+        .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
+        .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
     </style>
 </head>
-
 <body>
 
-<div id="status-panel">
-    <span class="label">Total Residential Buildings:</span>
-    <span id="count-display" class="count-num">0</span>
-</div>
+    <div id="status-panel">
+        <span class="label">Total Residential Buildings:</span>
+        <span id="count-display" class="count-num">0</span>
+    </div>
 
-<div id="search-panel">
-    <input id="address-input" placeholder="Search Huntsville address..." autocomplete="off">
-    <button id="go-btn">Go</button>
-    <ul id="suggestions"></ul>
-</div>
+    <div id="map"></div>
 
-<div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script>
+    (async function() {
+        // Initialize Map
+        const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-<script>
-(async function () {
+        const buildingsLayer = L.layerGroup().addTo(map);
+        const drawnItems = new L.FeatureGroup().addTo(map);
+        let allBuildings = [];
 
-    /* Map */
-    const map = L.map('map', { renderer: L.canvas() })
-        .setView([34.7304, -86.5861], 12);
+        // Load Background Data
+        try {
+            const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-        .addTo(map);
+            const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+            L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
-    const buildingsLayer = L.layerGroup().addTo(map);
-    const drawnItems = new L.FeatureGroup().addTo(map);
-    let allBuildings = [];
+            const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
+            for (const f of files) {
+                const data = await fetch(f).then(res => res.json());
+                allBuildings = allBuildings.concat(data.features);
+            }
 
-    /* Load Data */
-    const files = [
-        'Huntsville Residential Buildings Part1.geojson',
-        'Huntsville Residential Buildings Part2.geojson',
-        'OSMCombinedUnique_with_GEOIDFQ.geojson'
-    ];
-
-    for (const f of files) {
-        const data = await fetch(f).then(r => r.json());
-        allBuildings = allBuildings.concat(data.features);
-    }
-
-    /* Drawing */
-    const drawControl = new L.Control.Draw({
-        draw: {
-            polyline: false,
-            marker: false,
-            circlemarker: false,
-            polygon: true,
-            rectangle: true,
-            circle: true
-        },
-        edit: false
-    });
-    map.addControl(drawControl);
-
-    map.on('draw:created', e => {
-        drawnItems.clearLayers();
-        drawnItems.addLayer(e.layer);
-
-        let geoJSON;
-        if (e.layer instanceof L.Circle) {
-            const c = e.layer.getLatLng();
-            geoJSON = turf.circle([c.lng, c.lat], e.layer.getRadius() / 1000);
-        } else {
-            geoJSON = e.layer.toGeoJSON();
+            // ✅ Removed all load-status messages
+        } catch (e) { 
+            // ✅ Removed error messages
         }
 
-        runBuildingSearch(geoJSON);
-    });
-
-    function runBuildingSearch(filterShape) {
-        buildingsLayer.clearLayers();
-
-        const results = allBuildings.filter(b =>
-            turf.booleanIntersects(b, filterShape)
-        );
-
-        document.getElementById('count-display').innerText =
-            results.length.toLocaleString();
-
-        L.geoJSON(results, {
-            style: { color: '#00b894', weight: 1, fillOpacity: 0.6 },
-            interactive: false
-        }).addTo(buildingsLayer);
-    }
-
-    /* Broom Button */
-    const cleaner = L.control({ position: 'topright' });
-    cleaner.onAdd = () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = '<a href="#">🧹</a>';
-        div.onclick = e => {
-            e.preventDefault();
+        // Function to search buildings inside drawn shapes
+        function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
-            drawnItems.clearLayers();
-            document.getElementById('count-display').innerText = "0";
-        };
-        return div;
-    };
-    cleaner.addTo(map);
+            
+            const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
+            const results = allBuildings.filter(building => {
+                const bBox = turf.bboxPolygon(turf.bbox(building));
+                if (!turf.booleanIntersects(searchBbox, bBox)) return false;
+                return turf.booleanIntersects(building, filterShape);
+            });
 
-    /* Address Search */
-    const input = document.getElementById('address-input');
-    const suggestions = document.getElementById('suggestions');
-    const goBtn = document.getElementById('go-btn');
+            document.getElementById('count-display').innerText = results.length.toLocaleString();
 
-    let selected = null;
-    const bbox = [-86.7156, 34.63, -86.53, 34.82];
+            if (results.length > 0) {
+                L.geoJSON(results, {
+                    style: (f) => ({ color: f.properties?.OSM ? '#d63031' : '#00b894', weight: 1, fillOpacity: 0.6 }),
+                    interactive: false
+                }).addTo(buildingsLayer);
+            }
+        }
 
-    input.addEventListener('input', async () => {
-        if (!input.value) { suggestions.style.display = 'none'; return; }
+        // Drawing Tools (only draw, no edit/delete buttons)
+        const drawControl = new L.Control.Draw({
+            draw: { 
+                polyline: false, 
+                marker: false, 
+                circlemarker: false, 
+                polygon: true, 
+                rectangle: true, 
+                circle: true 
+            },
+            edit: false // completely remove edit/delete buttons
+        });
+        map.addControl(drawControl);
 
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&viewbox=${bbox[0]},${bbox[3]},${bbox[2]},${bbox[1]}&bounded=1&q=${encodeURIComponent(input.value)}`;
-        const data = await fetch(url).then(r => r.json());
+        map.on('draw:created', function(e) {
+            drawnItems.clearLayers(); // Clear previous shapes
+            const layer = e.layer;
+            drawnItems.addLayer(layer);
 
-        suggestions.innerHTML = '';
-        data.forEach(p => {
-            const li = document.createElement('li');
-            li.textContent = p.display_name;
-            li.onclick = () => {
-                selected = p;
-                input.value = p.display_name;
-                suggestions.style.display = 'none';
-            };
-            suggestions.appendChild(li);
+            let geoJSON;
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                const radiusKms = layer.getRadius() / 1000;
+                geoJSON = turf.circle([center.lng, center.lat], radiusKms, { units: 'kilometers' });
+            } else {
+                geoJSON = layer.toGeoJSON();
+            }
+
+            runBuildingSearch(geoJSON);
         });
 
-        suggestions.style.display = data.length ? 'block' : 'none';
-    });
+        // Manual Reset Button (Broom)
+        const cleaner = L.control({position: 'topright'});
+        cleaner.onAdd = () => {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+            div.onclick = (e) => {
+                e.preventDefault();
+                buildingsLayer.clearLayers();
+                drawnItems.clearLayers();
+                document.getElementById('count-display').innerText = "0";
+            };
+            return div;
+        };
+        cleaner.addTo(map);
 
-    goBtn.onclick = () => {
-        if (selected) {
-            map.setView([+selected.lat, +selected.lon], 18);
-        }
-    };
-
-})();
-</script>
-
+    })();
+    </script>
 </body>
 </html>
