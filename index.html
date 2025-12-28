@@ -1,141 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Huntsville Map - Leaflet Only</title>
+    <meta charset="UTF-8">
+    <title>Huntsville Map - Interactive Buildings</title>
 
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<!-- Leaflet.draw CSS -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-<style>
-  body { margin:0; padding:0; }
-  #map { height:100vh; }
-</style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+    <style>
+        body { margin:0; padding:0; font-family: sans-serif; }
+        #map { height: 100vh; }
+        
+        /* The UI box for status and counts */
+        #status-panel {
+            position: absolute;
+            top: 10px;
+            right: 50px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            min-width: 150px;
+        }
+        .loading { color: orange; font-weight: bold; }
+        .ready { color: green; font-weight: bold; }
+        .count-num { font-size: 1.2em; color: #007bff; display: block; margin-top: 5px; }
+    </style>
 </head>
 <body>
-<div id="map"></div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<!-- Leaflet.draw JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <div id="status-panel">
+        <div id="load-status" class="loading">Status: Loading Data...</div>
+        <div id="count-display">Buildings: 0</div>
+    </div>
 
-<script>
-(async function() {
-  const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
+    <div id="map"></div>
 
-  // Base map
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
-  // Load block groups
-  const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(r=>r.json());
-  const blockGroupsLayer = L.geoJSON(blockGroupsData, {
-      style: { color:'black', weight:1, fillOpacity:0 }
-  }).addTo(map);
+    <script>
+    (async function() {
+        // 1️⃣ Initialize map
+        const map = L.map('map', { 
+            renderer: L.canvas(), 
+            preferCanvas: true 
+        }).setView([34.7304, -86.5861], 12);
 
-  // Load city boundary
-  const cityBoundary = await fetch('Boundary_City_Huntsville_poly.geojson').then(r=>r.json());
-  const cityLayer = L.geoJSON(cityBoundary, { style:{ color:'orange', weight:2, fillColor:'orange', fillOpacity:0.3 } }).addTo(map);
-  map.fitBounds(cityLayer.getBounds());
+        // 2️⃣ Base map (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-  // Load buildings
-  let allBuildings = [];
-  async function loadBuildings(url) {
-    const data = await fetch(url).then(r=>r.json());
-    allBuildings = allBuildings.concat(data.features);
-  }
-  await loadBuildings('Huntsville Residential Buildings Part1.geojson');
-  await loadBuildings('Huntsville Residential Buildings Part2.geojson');
-  await loadBuildings('OSMCombinedUnique_with_GEOIDFQ.geojson');
+        // Layers for organization
+        const buildingsLayer = L.layerGroup().addTo(map);
+        let allBuildings = [];
 
-  const buildingsLayer = L.layerGroup().addTo(map);
+        // 3️⃣ Load Data
+        try {
+            // Load City Boundary
+            const cityBoundary = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+            const cityLayer = L.geoJSON(cityBoundary, {
+                style: { color: 'orange', weight: 2, fillColor: 'orange', fillOpacity: 0.1, interactive: false }
+            }).addTo(map);
+            map.fitBounds(cityLayer.getBounds());
 
-  // Helper: convert circle to polygon approximation
-  function circleToPolygon(circle, points=64) {
-    const latlng = circle.getLatLng();
-    const r = circle.getRadius();
-    const angleStep = 360 / points;
-    const latlngs = [];
-    for (let i=0;i<points;i++) {
-      const angle = angleStep * i;
-      const dest = L.GeometryUtil.destination(latlng, angle, r);
-      latlngs.push([dest.lat, dest.lng]);
-    }
-    return L.polygon(latlngs);
-  }
+            // Load Block Groups
+            const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+            L.geoJSON(blockGroupsData, {
+                style: { color: 'black', weight: 0.5, fillOpacity: 0 },
+                onEachFeature: (feature, layer) => {
+                    layer.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        showBuildingsInPolygon(feature);
+                    });
+                }
+            }).addTo(map);
 
-  // Function to check if building polygon intersects drawn shape
-  function layerIntersects(layer, buildingCoords) {
-    const building = L.polygon(buildingCoords.map(c=>[c[1], c[0]]));
-    // First fast bounds check
-    if(!layer.getBounds().intersects(building.getBounds())) return false;
-    // Then check if any building vertex is inside shape
-    const layerPolygon = layer;
-    return building.getLatLngs()[0].some(pt => layerPolygon.contains(pt));
-  }
+            // Load Building Files
+            const files = [
+                'Huntsville Residential Buildings Part1.geojson',
+                'Huntsville Residential Buildings Part2.geojson',
+                'OSMCombinedUnique_with_GEOIDFQ.geojson'
+            ];
 
-  // Show buildings within/intersecting layer
-  function showBuildings(drawLayer) {
-    buildingsLayer.clearLayers();
-    let shapeLayer;
-    if (drawLayer instanceof L.Circle) {
-      shapeLayer = circleToPolygon(drawLayer);
-    } else {
-      shapeLayer = drawLayer;
-    }
+            for (const file of files) {
+                const data = await fetch(file).then(res => res.json());
+                allBuildings = allBuildings.concat(data.features);
+            }
 
-    let count = 0;
-    allBuildings.forEach(f => {
-      if(!f.geometry || !f.geometry.coordinates) return;
-      const coords = f.geometry.coordinates[0]; // assuming Polygon
-      if(layerIntersects(shapeLayer, coords)){
-        const color = f.properties && f.properties.OSM ? 'darkred' : 'darkgreen';
-        L.polygon(coords.map(c=>[c[1], c[0]]), { color, weight:0.3, fillOpacity:0.6, interactive:false }).addTo(buildingsLayer);
-        count++;
-      }
-    });
+            // Update Status to Ready
+            document.getElementById('load-status').innerHTML = "Status: Ready ✅";
+            document.getElementById('load-status').className = "ready";
 
-    // Popup at center
-    const center = shapeLayer.getBounds().getCenter();
-    L.popup()
-     .setLatLng(center)
-     .setContent(`<b>${count}</b> building(s) displayed`)
-     .openOn(map);
-  }
+        } catch (err) {
+            document.getElementById('load-status').innerHTML = "Status: Error loading files";
+            console.error(err);
+        }
 
-  // Block group click
-  blockGroupsLayer.eachLayer(layer => {
-    layer.on('click', ()=>showBuildings(layer));
-  });
+        // 4️⃣ The Calculation Engine (Optimized)
+        function showBuildingsInPolygon(filterShape) {
+            buildingsLayer.clearLayers();
+            
+            // Fast Pre-filter using Bounding Box
+            const searchBbox = turf.bbox(filterShape);
+            const searchBboxPoly = turf.bboxPolygon(searchBbox);
 
-  // Draw control
-  const drawControl = new L.Control.Draw({
-    draw: { polyline:false, marker:false, circlemarker:false, polygon:true, rectangle:true, circle:true },
-    edit:false
-  });
-  map.addControl(drawControl);
+            const filtered = allBuildings.filter(building => {
+                // Step 1: Quick math check (is it even in the neighborhood?)
+                const bBbox = turf.bbox(building);
+                const isNear = turf.booleanIntersects(searchBboxPoly, turf.bboxPolygon(bBbox));
+                
+                if (!isNear) return false;
 
-  map.on('draw:created', e=>{
-    showBuildings(e.layer);
-  });
+                // Step 2: Precise check (does it touch the actual shape?)
+                return turf.booleanIntersects(building, filterShape);
+            });
 
-  // Clear button
-  const clearButton = L.control({position:'topright'});
-  clearButton.onAdd = function(){
-    const div = L.DomUtil.create('div','leaflet-bar leaflet-control');
-    div.innerHTML='<a href="#" title="Clear Buildings" style="font-size:16px;line-height:24px;">🧹</a>';
-    div.style.backgroundColor='white'; div.style.width='34px'; div.style.height='34px';
-    div.style.textAlign='center'; div.style.cursor='pointer';
-    div.onclick = ()=>buildingsLayer.clearLayers();
-    return div;
-  };
-  clearButton.addTo(map);
+            // Update the Count UI
+            document.getElementById('count-display').innerHTML = `Buildings: <span class="count-num">${filtered.length.toLocaleString()}</span>`;
 
-})();
-</script>
+            // Render Results on Map as one single layer for speed
+            if (filtered.length > 0) {
+                L.geoJSON(filtered, {
+                    interactive: false,
+                    style: (f) => ({
+                        color: f.properties?.OSM ? 'darkred' : 'darkgreen',
+                        weight: 0.5,
+                        fillOpacity: 0.7
+                    })
+                }).addTo(buildingsLayer);
+            }
+        }
 
-<!-- Leaflet GeometryUtil for circle-to-polygon -->
-<script src="https://rawcdn.githack.com/makinacorpus/Leaflet.GeometryUtil/0.9.3/dist/leaflet.geometryutil.min.js"></script>
+        // 5️⃣ Drawing Tools Setup
+        const drawControl = new L.Control.Draw({
+            draw: {
+                polyline: false, marker: false, circlemarker: false,
+                polygon: true, rectangle: true, circle: true
+            },
+            edit: false
+        });
+        map.addControl(drawControl);
+
+        map.on('draw:created', function(e) {
+            const layer = e.layer;
+            let shapeGeoJSON;
+
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                // Convert Leaflet circle to Turf polygon
+                shapeGeoJSON = turf.circle([center.lng, center.lat], layer.getRadius()/1000, {units:'kilometers'});
+            } else {
+                shapeGeoJSON = layer.toGeoJSON();
+            }
+
+            showBuildingsInPolygon(shapeGeoJSON);
+        });
+
+        // 6️⃣ Clear Button
+        const clearButton = L.control({position: 'topright'});
+        clearButton.onAdd = function() {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            div.innerHTML = '<a href="#" title="Clear All" style="font-size:18px; text-decoration:none; background:white; width:34px; height:34px; display:flex; align-items:center; justify-content:center;">🧹</a>';
+            div.onclick = function(e) {
+                e.preventDefault();
+                buildingsLayer.clearLayers();
+                document.getElementById('count-display').innerHTML = "Buildings: 0";
+            };
+            return div;
+        };
+        clearButton.addTo(map);
+
+    })();
+    </script>
 </body>
 </html>
