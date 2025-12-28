@@ -75,40 +75,36 @@
         const buildingsLayer = L.layerGroup().addTo(map);
 
         // 6️⃣ Function to display buildings intersecting a polygon
-function showBuildingsInPolygon(filterPolygon) {
-    buildingsLayer.clearLayers();
-    const filtered = allBuildings.filter(f => turf.booleanIntersects(f, filterPolygon));
+        function showBuildingsInPolygon(filterPolygon) {
+            buildingsLayer.clearLayers();
+            const filtered = allBuildings.filter(f => turf.booleanIntersects(f, filterPolygon));
 
-    filtered.forEach(f => {
-        const isOSM = f.properties && f.properties.OSM; // adjust if your OSM features have a flag
-        const color = isOSM ? 'darkred' : 'darkgreen';
+            filtered.forEach(f => {
+                const isOSM = f.properties && f.properties.OSM; // adjust if your OSM features have a flag
+                const color = isOSM ? 'darkred' : 'darkgreen';
 
-        L.geoJSON(f, {
-            interactive: false,
-            style: { color: color, weight: 0.3, fillOpacity: 0.6 }
-        }).addTo(buildingsLayer);
-    });
+                L.geoJSON(f, {
+                    interactive: false,
+                    style: { color: color, weight: 0.3, fillOpacity: 0.6 }
+                }).addTo(buildingsLayer);
+            });
 
-    // Compute center for popup for all shapes
-    let center;
-    if (filterPolygon.geometry.type === 'Polygon' || filterPolygon.geometry.type === 'MultiPolygon') {
-        center = turf.center(filterPolygon).geometry.coordinates;
-    } else if (filterPolygon.geometry.type === 'Point') {
-        center = filterPolygon.geometry.coordinates;
-    } else if (filterPolygon.type === 'Feature' && filterPolygon.geometry) {
-        // Handles Turf circle generated from Leaflet Circle
-        center = turf.center(filterPolygon).geometry.coordinates;
-    } else {
-        // fallback to map center
-        center = [map.getCenter().lng, map.getCenter().lat];
-    }
+            // Compute center using Turf centerOfMass for all shapes
+            let center;
+            try {
+                const centerPoint = turf.centerOfMass(filterPolygon);
+                center = centerPoint.geometry.coordinates;
+            } catch (e) {
+                // fallback to map center
+                center = [map.getCenter().lng, map.getCenter().lat];
+            }
 
-    // Show popup with count
-    L.popup()
-     .setLatLng([center[1], center[0]])
-     .setContent(`<b>${filtered.length}</b> building(s) displayed`)
-     .openOn(map);
-}
+            // Show popup with count
+            L.popup()
+             .setLatLng([center[1], center[0]])
+             .setContent(`<b>${filtered.length}</b> building(s) displayed`)
+             .openOn(map);
+        }
 
         // 7️⃣ Leaflet.draw setup
         const drawControl = new L.Control.Draw({
