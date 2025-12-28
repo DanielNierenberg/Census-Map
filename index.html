@@ -20,7 +20,6 @@
 <body>
 
     <div id="status-panel">
-        <div id="load-status">⏳ Loading Data...</div>
         <span class="label">Total Residential Buildings:</span>
         <span id="count-display" class="count-num">0</span>
     </div>
@@ -55,8 +54,6 @@
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
             }
-            document.getElementById('load-status').innerHTML = "✅ Ready";
-        } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error Loading Files"; }
 
         // 2. The Search Function
         // This ONLY runs when a shape is finished drawing
