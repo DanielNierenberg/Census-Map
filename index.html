@@ -48,7 +48,7 @@
 
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             // WE REMOVED ONCLICK COMPLETELY HERE
-            L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
+            L.geoJSON(bgData, { style: { color: 'green', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
             const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
             for (const f of files) {
