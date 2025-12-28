@@ -87,13 +87,17 @@
 
         // 3. Drawing Tools
     // 3. Drawing Tools
+// 3. Drawing Tools
 const drawControl = new L.Control.Draw({
-    draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
-    edit: { 
-        featureGroup: drawnItems, 
-        edit: false,   // disable edit button
-        remove: false  // disable delete button
-    }
+    draw: { 
+        polyline: false, 
+        marker: false, 
+        circlemarker: false, 
+        polygon: true, 
+        rectangle: true, 
+        circle: true 
+    },
+    edit: false  // completely disables the edit toolbar (no buttons at all)
 });
 map.addControl(drawControl);
 
