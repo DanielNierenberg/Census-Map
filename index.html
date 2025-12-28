@@ -1,201 +1,92 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Huntsville Map - Organized Layout</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-    <style>
-        body { margin:0; padding:0; font-family: sans-serif; }
-        #map { height: 100vh; }
-        
-        /* 1. STATUS PANEL (Top Right) */
-        #status-panel {
-            position: absolute; top: 10px; right: 10px; z-index: 1001;
-            background: white; padding: 12px; border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
-            width: 200px; text-align: center;
-        }
-        .count-num { font-size: 2em; color: #2d3436; font-weight: bold; display: block; }
-        .label { font-size: 0.75em; color: #636e72; text-transform: uppercase; font-weight: bold; }
+<style>
+    body { margin:0; padding:0; font-family: sans-serif; }
+    #map { height: 100vh; }
+    
+    /* Container for all right-side controls to ensure they stack */
+    .right-panel-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-end;
+    }
 
-        /* 2. SEARCH BOX (Stacked below status panel) */
-        .search-box-container {
-            background: white; padding: 10px; border-radius: 8px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-            margin-top: 135px; /* Adjust this if the status panel height changes */
-            width: 204px;
-        }
-        #roadSearch { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .btn-row { display: flex; gap: 5px; }
-        .btn-row button { flex: 1; cursor: pointer; padding: 6px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; }
-        .btn-row button:hover { background: #e9ecef; }
+    /* 1. STATUS PANEL */
+    .status-panel-ui {
+        background: white; padding: 12px; border-radius: 8px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
+        width: 200px; text-align: center;
+    }
+    .count-num { font-size: 2em; color: #2d3436; font-weight: bold; display: block; }
+    .label { font-size: 0.75em; color: #636e72; text-transform: uppercase; font-weight: bold; }
 
-        /* 3. AUTOCOMPLETE SUGGESTIONS */
-        .suggestions {
-            position: absolute; background: white; border: 1px solid #ccc;
-            max-height: 180px; overflow-y: auto; z-index: 1005;
-            display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .suggestions div { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
-        .suggestions div:hover { background-color: #f0f0f0; }
-    </style>
-</head>
+    /* 2. SEARCH BOX */
+    .search-box-container {
+        background: white; padding: 10px; border-radius: 8px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        width: 200px;
+    }
+    #roadSearch { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    .btn-row { display: flex; gap: 5px; }
+    .btn-row button { flex: 1; cursor: pointer; padding: 6px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; }
+
+    /* 3. AUTOCOMPLETE */
+    .suggestions {
+        position: absolute; background: white; border: 1px solid #ccc;
+        max-height: 180px; overflow-y: auto; z-index: 5000; /* High z-index */
+        display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .suggestions div { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
+    .suggestions div:hover { background-color: #f0f0f0; }
+</style>
+
 <body>
-
-    <div id="status-panel">
-        <div id="load-status">⏳ Loading...</div>
-        <span class="label">Buildings Inside Shape</span>
-        <span id="count-display" class="count-num">0</span>
-    </div>
-
     <div id="map"></div>
-
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
     (async function() {
-        // --- INITIALIZE MAP ---
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const buildingsLayer = L.layerGroup().addTo(map);
         const drawnItems = new L.FeatureGroup().addTo(map);
         let allBuildings = [];
-        const bbox = "34.509,-86.802,34.880,-86.383";
 
-        // --- DATA LOADING ---
-        try {
-            fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json()).then(data => {
-                L.geoJSON(data, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
-            });
-            const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
-            for (const f of files) {
-                const data = await fetch(f).then(res => res.json());
-                allBuildings = allBuildings.concat(data.features);
-            }
-            document.getElementById('load-status').innerHTML = "✅ Ready";
-        } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error"; }
+        // --- RIGHT SIDE CONTROLS ---
+        // We create one control for the Count and one for the Search to let Leaflet stack them
+        
+        // 1. Count Panel
+        const countControl = L.control({ position: 'topright' });
+        countControl.onAdd = function() {
+            const div = L.DomUtil.create('div', 'status-panel-ui');
+            div.innerHTML = `
+                <div id="load-status">⏳ Loading...</div>
+                <span class="label">Buildings Inside Shape</span>
+                <span id="count-display" class="count-num">0</span>`;
+            return div;
+        };
+        countControl.addTo(map);
 
-        // --- BUILDING SEARCH ---
-        function runBuildingSearch(filterShape) {
-            buildingsLayer.clearLayers();
-            const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
-            const results = allBuildings.filter(building => {
-                const bBox = turf.bboxPolygon(turf.bbox(building));
-                return turf.booleanIntersects(searchBbox, bBox) && turf.booleanIntersects(building, filterShape);
-            });
-            document.getElementById('count-display').innerText = results.length.toLocaleString();
-            if (results.length > 0) {
-                L.geoJSON(results, {
-                    style: (f) => ({ color: f.properties?.OSM ? '#d63031' : '#00b894', weight: 1, fillOpacity: 0.6 }),
-                    interactive: false
-                }).addTo(buildingsLayer);
-            }
-        }
-
-        // --- SEARCH CONTROL (Positioned Right Side) ---
+        // 2. Search Panel
         const searchControl = L.control({ position: 'topright' });
         searchControl.onAdd = function() {
             const div = L.DomUtil.create('div', 'search-box-container');
             div.innerHTML = `<b>Locate Road</b><br>
-                <input type="text" id="roadSearch" placeholder="Enter street name..." autocomplete="off"/>
+                <input type="text" id="roadSearch" placeholder="Street name..." autocomplete="off"/>
                 <div class="btn-row">
                     <button id="searchBtn">Go</button>
                     <button id="clearSearchBtn">Clear</button>
                 </div>`;
+            // Stop map clicks from firing when clicking inside the search box
+            L.DomEvent.disableClickPropagation(div);
             return div;
         };
         searchControl.addTo(map);
 
-        // --- AUTOCOMPLETE LOGIC ---
-        let allRoadNames = [];
-        fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json][timeout:25];way["highway"](${bbox});out tags;`))
-            .then(res => res.json())
-            .then(data => {
-                const names = new Set();
-                data.elements.forEach(el => { if (el.tags && el.tags.name) names.add(el.tags.name); });
-                allRoadNames = Array.from(names).sort();
-            });
-
-        const input = document.getElementById('roadSearch');
-        const suggestionBox = document.createElement('div');
-        suggestionBox.className = 'suggestions';
-        document.body.appendChild(suggestionBox);
-
-        function positionSuggestionBox() {
-            const rect = input.getBoundingClientRect();
-            suggestionBox.style.left = rect.left + 'px';
-            suggestionBox.style.top = rect.bottom + 'px';
-            suggestionBox.style.width = rect.width + 'px';
-        }
-
-        input.addEventListener('input', function() {
-            positionSuggestionBox();
-            const query = this.value.toLowerCase().trim();
-            suggestionBox.innerHTML = '';
-            if (!query) { suggestionBox.style.display = 'none'; return; }
-            const matches = allRoadNames.filter(name => name.toLowerCase().includes(query)).slice(0, 8);
-            matches.forEach(name => {
-                const div = document.createElement('div');
-                div.textContent = name;
-                div.onclick = () => { input.value = name; suggestionBox.style.display = 'none'; };
-                suggestionBox.appendChild(div);
-            });
-            suggestionBox.style.display = matches.length ? 'block' : 'none';
-        });
-
-        // Search Action
-        async function executeSearch() {
-            const roadName = input.value.trim();
-            if (!roadName) return;
-            const query = `[out:json][timeout:25];way["highway"]["name"~"${roadName}",i](${bbox});(._;>;);out body;`;
-            try {
-                const res = await fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query));
-                const data = await res.json();
-                const nodes = {};
-                data.elements.forEach(el => { if (el.type === "node") nodes[el.id] = [el.lat, el.lon]; });
-                const bounds = L.latLngBounds();
-                let found = false;
-                data.elements.forEach(el => {
-                    if (el.type === "way") {
-                        el.nodes.forEach(id => { if(nodes[id]){ bounds.extend(nodes[id]); found = true; } });
-                    }
-                });
-                if (found) map.fitBounds(bounds, { padding: [100, 100], maxZoom: 16 });
-                else alert("Road not found in Huntsville.");
-            } catch(e) { console.error("Search error", e); }
-        }
-
-        document.getElementById('searchBtn').addEventListener('click', executeSearch);
-        input.addEventListener('keypress', e => { if(e.key === 'Enter') executeSearch(); });
-        document.getElementById('clearSearchBtn').addEventListener('click', () => { input.value = ''; });
-
-        // --- DRAWING TOOLS (EXPLICITLY LEFT) ---
-        const drawControl = new L.Control.Draw({
-            position: 'topleft', // Fixed on the left
-            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
-            edit: { featureGroup: drawnItems, remove: true }
-        });
-        map.addControl(drawControl);
-
-        map.on('draw:created', function(e) {
-            drawnItems.clearLayers();
-            const layer = e.layer;
-            drawnItems.addLayer(layer);
-            let geoJSON = (layer instanceof L.Circle) 
-                ? turf.circle([layer.getLatLng().lng, layer.getLatLng().lat], layer.getRadius() / 1000, {units: 'kilometers'})
-                : layer.toGeoJSON();
-            runBuildingSearch(geoJSON);
-        });
-
-        // --- CLEANER (STACKED RIGHT) ---
+        // 3. Broom (Cleaner) - Leaflet will put this below the Search automatically
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" title="Clear All Polygons" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;">🧹</a>';
+            div.innerHTML = '<a href="#" title="Clear All" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;">🧹</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
@@ -206,10 +97,16 @@
         };
         cleaner.addTo(map);
 
-        window.addEventListener('resize', positionSuggestionBox);
-        document.addEventListener('click', e => { if (e.target !== input) suggestionBox.style.display = 'none'; });
+        // --- DRAWING TOOLS (LEFT SIDE) ---
+        const drawControl = new L.Control.Draw({
+            position: 'topleft',
+            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
+            edit: { featureGroup: drawnItems, remove: true }
+        });
+        map.addControl(drawControl);
 
+        // (The rest of your Road Search logic and Building Search logic goes here...)
+        // Ensure you use document.getElementById('roadSearch') AFTER searchControl.addTo(map)
     })();
     </script>
 </body>
-</html>
