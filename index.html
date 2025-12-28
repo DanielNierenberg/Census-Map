@@ -86,11 +86,16 @@
         }
 
         // 3. Drawing Tools
-        const drawControl = new L.Control.Draw({
-            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
-            edit: { featureGroup: drawnItems, remove: true }
-        });
-        map.addControl(drawControl);
+    // 3. Drawing Tools
+const drawControl = new L.Control.Draw({
+    draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
+    edit: { 
+        featureGroup: drawnItems, 
+        edit: false,   // disable edit button
+        remove: false  // disable delete button
+    }
+});
+map.addControl(drawControl);
 
         map.on('draw:created', function(e) {
             drawnItems.clearLayers(); // Clear old shapes
