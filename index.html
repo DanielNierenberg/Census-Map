@@ -2,76 +2,68 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Address Search & Drawing</title>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>Huntsville Map - Address Search</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-
     <style>
         body { margin:0; padding:0; font-family: sans-serif; }
-        #map { height: 100vh; width: 100%; }
-        
+        #map { height: 100vh; }
         #status-panel {
             position: absolute; top: 10px; right: 60px; z-index: 1000;
             background: white; padding: 15px; border-radius: 8px;
             box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
         }
+        /* Style for the Search Bar */
+        #search-container {
+            position: absolute; top: 140px; right: 10px; z-index: 1000;
+            background: white; padding: 8px; border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            display: flex; gap: 5px;
+        }
+        #address-input { width: 200px; padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
+        #go-btn { padding: 5px 10px; cursor: pointer; background: #3388ff; color: white; border: none; border-radius: 3px; font-weight: bold; }
+        
         .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
         .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
-        
-        /* Ensure the search bar is visible and doesn't get hidden */
-        .leaflet-top.leaflet-left { margin-top: 10px; margin-left: 10px; }
-        .leaflet-control-geocoder { 
-            border-radius: 4px; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
-            z-index: 1001 !important; 
-        }
     </style>
 </head>
 <body>
 
     <div id="status-panel">
-        <div id="load-status">⏳ Loading Huntsville Data...</div>
+        <div id="load-status">⏳ Loading Data...</div>
         <span class="label">Buildings Inside Shape:</span>
         <span id="count-display" class="count-num">0</span>
     </div>
 
+    <div id="search-container">
+        <input type="text" id="address-input" list="address-suggestions" placeholder="Search Huntsville address...">
+        <datalist id="address-suggestions"></datalist>
+        <button id="go-btn">GO</button>
+    </div>
+
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
     <script>
     (async function() {
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const buildingsLayer = L.layerGroup().addTo(map);
         const drawnItems = new L.FeatureGroup().addTo(map);
+        const searchMarkerLayer = L.layerGroup().addTo(map); // For the red pin
         let allBuildings = [];
 
-        // SEARCH BAR (Top Left)
-        const geocoder = L.Control.geocoder({
-            defaultMarkGeocode: false,
-            placeholder: "Search address or place...",
-            collapsed: false
-        })
-        .on('markgeocode', function(e) {
-            const bbox = e.geocode.bbox;
-            map.fitBounds(bbox); 
-        })
-        .addTo(map);
+        // Huntsville Bounds for Search (Lon/Lat: MinX, MinY, MaxX, MaxY)
+        const HUNTSVILLE_VIEWBOX = "-86.8,34.5,-86.3,34.9";
 
-        // DATA LOADING
+        // Load Data
         try {
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
             L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
-
-            const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
-            L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
             const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
             for (const f of files) {
@@ -81,6 +73,61 @@
             document.getElementById('load-status').innerHTML = "✅ Ready";
         } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error Loading Files"; }
 
+        // --- SEARCH LOGIC ---
+        const input = document.getElementById('address-input');
+        const list = document.getElementById('address-suggestions');
+        const goBtn = document.getElementById('go-btn');
+
+        // Handle typing (Autocomplete)
+        input.addEventListener('input', async (e) => {
+            const val = e.target.value;
+            if (val.length < 3) return; // Wait for 3 chars
+
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&viewbox=${HUNTSVILLE_VIEWBOX}&bounded=1&limit=5`;
+            
+            try {
+                const response = await fetch(url);
+                const results = await response.json();
+                list.innerHTML = ''; // Clear old suggestions
+                results.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.display_name;
+                    // Store lat/lon in data attributes
+                    option.dataset.lat = item.lat;
+                    option.dataset.lon = item.lon;
+                    list.appendChild(option);
+                });
+            } catch (err) { console.error("Search error", err); }
+        });
+
+        // Handle "Go" Click
+        goBtn.onclick = () => {
+            const val = input.value;
+            const options = Array.from(list.options);
+            const match = options.find(opt => opt.value === val);
+
+            if (match) {
+                const lat = match.dataset.lat;
+                const lon = match.dataset.lon;
+                zoomToLocation(lat, lon);
+            } else {
+                // If they didn't pick from list, try a direct search
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&viewbox=${HUNTSVILLE_VIEWBOX}&bounded=1&limit=1`;
+                fetch(url).then(res => res.json()).then(data => {
+                    if (data.length > 0) zoomToLocation(data[0].lat, data[0].lon);
+                });
+            }
+        };
+
+        function zoomToLocation(lat, lon) {
+            searchMarkerLayer.clearLayers();
+            const coords = [parseFloat(lat), parseFloat(lon)];
+            map.flyTo(coords, 17);
+            L.marker(coords).addTo(searchMarkerLayer)
+                .bindPopup("Searched Location").openPopup();
+        }
+
+        // --- EXISTING LOGIC ---
         function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
             const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
@@ -98,9 +145,7 @@
             }
         }
 
-        // DRAWING TOOLS (Moved to topright to avoid overlapping search)
         const drawControl = new L.Control.Draw({
-            position: 'topright',
             draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
             edit: { featureGroup: drawnItems, remove: true }
         });
@@ -108,18 +153,19 @@
 
         map.on('draw:created', function(e) {
             drawnItems.clearLayers();
-            drawnItems.addLayer(e.layer);
+            const layer = e.layer;
+            drawnItems.addLayer(layer);
             let geoJSON;
-            if (e.layer instanceof L.Circle) {
-                const center = e.layer.getLatLng();
-                geoJSON = turf.circle([center.lng, center.lat], e.layer.getRadius() / 1000, {units: 'kilometers'});
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                const radiusKms = layer.getRadius() / 1000;
+                geoJSON = turf.circle([center.lng, center.lat], radiusKms, {units: 'kilometers'});
             } else {
-                geoJSON = e.layer.toGeoJSON();
+                geoJSON = layer.toGeoJSON();
             }
             runBuildingSearch(geoJSON);
         });
 
-        // BROOM (Top Right)
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -128,6 +174,8 @@
                 e.preventDefault();
                 buildingsLayer.clearLayers();
                 drawnItems.clearLayers();
+                searchMarkerLayer.clearLayers();
+                input.value = '';
                 document.getElementById('count-display').innerText = "0";
             };
             return div;
