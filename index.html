@@ -20,89 +20,106 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        // 1️⃣ Initialize the map centered on Huntsville
-        const map = L.map('map').setView([34.7304, -86.5861], 12);
+    // 1️⃣ Initialize map with Canvas renderer
+    const map = L.map('map', {
+        renderer: L.canvas(),
+        preferCanvas: true
+    }).setView([34.7304, -86.5861], 12);
 
-        // 2️⃣ Add OpenStreetMap tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
-        }).addTo(map);
+    // 2️⃣ Base map
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+    }).addTo(map);
 
-        // 3️⃣ Load Block Groups GeoJSON (black outlines, no fill) with tooltip
-        fetch('Huntsville_Block_Groups.geojson')
+    // 3️⃣ Block Groups (keep tooltips — not too many features)
+    fetch('Huntsville_Block_Groups.geojson')
+        .then(res => res.json())
+        .then(geojson => {
+            L.geoJSON(geojson, {
+                style: {
+                    color: 'black',
+                    weight: 1,
+                    fillOpacity: 0
+                },
+                onEachFeature: (feature, layer) => {
+                    if (feature.properties) {
+                        layer.bindTooltip(
+                            `<b>Block Group:</b> ${feature.properties.NAMELSAD}<br>
+                             <b>GEOID:</b> ${feature.properties.GEOIDFQ}`
+                        );
+                    }
+                }
+            }).addTo(map);
+        });
+
+    // 4️⃣ City boundary
+    fetch('Boundary_City_Huntsville_poly.geojson')
+        .then(res => res.json())
+        .then(geojson => {
+            const cityLayer = L.geoJSON(geojson, {
+                style: {
+                    color: 'orange',
+                    weight: 2,
+                    fillColor: 'orange',
+                    fillOpacity: 0.3
+                }
+            }).addTo(map);
+
+            map.fitBounds(cityLayer.getBounds());
+        });
+
+    // 5️⃣ Buildings layer group (Part1 + Part2 merged in memory)
+    const buildingsLayer = L.layerGroup();
+
+    let buildingsLoaded = false;
+    const BUILDINGS_ZOOM_LEVEL = 14;
+
+    function loadBuildings(url) {
+        fetch(url)
             .then(res => res.json())
             .then(geojson => {
                 L.geoJSON(geojson, {
-                    style: { color: 'black', weight: 2, fillOpacity: 0 },
-                    onEachFeature: (feature, layer) => {
-                        if (feature.properties) {
-                            layer.bindTooltip(
-                                `<b>Block Group:</b> ${feature.properties.NAMELSAD}<br>` +
-                                `<b>GEOID:</b> ${feature.properties.GEOIDFQ}`
-                            );
-                        }
-                    }
-                }).addTo(map);
-            });
-
-        // 4️⃣ Load City Boundary GeoJSON as light orange fill and auto-zoom
-        fetch('Boundary_City_Huntsville_poly.geojson')
-            .then(res => res.json())
-            .then(geojson => {
-                const cityLayer = L.geoJSON(geojson, {
+                    interactive: false,   // 🚀 huge performance win
                     style: {
-                        color: 'orange',       // border color
-                        weight: 2,             // border thickness
-                        fillColor: 'orange',   // fill color
-                        fillOpacity: 0.3       // light fill
+                        color: 'darkgreen',
+                        weight: 0.3,        // thinner stroke = faster
+                        fillOpacity: 0.6
                     }
-                }).addTo(map);
-
-                // Auto-zoom to city boundary
-                map.fitBounds(cityLayer.getBounds());
+                }).addTo(buildingsLayer);
             });
+    }
 
-        // 5️⃣ Function to load residential buildings with tooltip
-        function loadBuildings(url) {
-            fetch(url)
-                .then(res => res.json())
-                .then(geojson => {
-                    L.geoJSON(geojson, {
-                        style: { color: 'darkgreen', weight: 1, fillOpacity: 0.7 },
-                        onEachFeature: (feature, layer) => {
-                            if (feature.properties) {
-                                layer.bindTooltip(
-                                    `<b>GEOID:</b> ${feature.properties.GEOIDFQ}<br>` +
-                                    `<b>Zone:</b> ${feature.properties.ZoneLabel}<br>` +
-                                    `<b>City:</b> ${feature.properties.City}`
-                                );
-                            }
-                        }
-                    }).addTo(map);
-                });
+    // 6️⃣ Load buildings ONLY when zoomed in
+    map.on('zoomend', () => {
+        if (map.getZoom() >= BUILDINGS_ZOOM_LEVEL && !buildingsLoaded) {
+            loadBuildings('Huntsville_Residential_Buildings_Part1.geojson');
+            loadBuildings('Huntsville_Residential_Buildings_Part2.geojson');
+
+            buildingsLayer.addTo(map);
+            buildingsLoaded = true;
         }
 
-        // 6️⃣ Load both residential building GeoJSON files
-        loadBuildings('Huntsville Residential Buildings Part1.geojson');
-        loadBuildings('Huntsville Residential Buildings Part2.geojson');
+        // Optional: remove buildings when zoomed out
+        if (map.getZoom() < BUILDINGS_ZOOM_LEVEL && buildingsLoaded) {
+            map.removeLayer(buildingsLayer);
+            buildingsLoaded = false;
+        }
+    });
 
-        // 7️⃣ Load OSM-only buildings as dark red
-        fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
-            .then(res => res.json())
-            .then(geojson => {
-                L.geoJSON(geojson, {
-                    style: { color: 'darkred', weight: 1, fillColor: 'darkred', fillOpacity: 0.7 },
-                    onEachFeature: (feature, layer) => {
-                        if (feature.properties) {
-                            layer.bindTooltip(
-                                `<b>GEOID:</b> ${feature.properties.GEOIDFQ}<br>` +
-                                `<b>Zone:</b> ${feature.properties.ZoneLabel}<br>` +
-                                `<b>City:</b> ${feature.properties.City}`
-                            );
-                        }
-                    }
-                }).addTo(map);
-            });
-    </script>
+    // 7️⃣ Optional: OSM-only buildings (same optimization)
+    fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
+        .then(res => res.json())
+        .then(geojson => {
+            L.geoJSON(geojson, {
+                interactive: false,
+                style: {
+                    color: 'darkred',
+                    weight: 0.3,
+                    fillColor: 'darkred',
+                    fillOpacity: 0.6
+                }
+            }).addTo(map);
+        });
+</script>
 </body>
 </html>
