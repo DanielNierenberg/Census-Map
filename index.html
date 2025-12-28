@@ -1,132 +1,101 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Huntsville Map - Minimal Draw</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-    <style>
-        body { margin:0; padding:0; font-family: sans-serif; }
-        #map { height: 100vh; }
-        #status-panel {
-            position: absolute; top: 10px; right: 60px; z-index: 1000;
-            background: white; padding: 15px; border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
-        }
-        .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
-        .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
-    </style>
-</head>
-<body>
+(async function() {
+    // Initialize Map
+    const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    <div id="status-panel">
-        <span class="label">Total Residential Buildings:</span>
-        <span id="count-display" class="count-num">0</span>
-    </div>
+    const buildingsLayer = L.layerGroup().addTo(map);
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    let allBuildings = [];
 
-    <div id="map"></div>
+    // Load Background Data
+    try {
+        const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+        L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+        const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+        L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
-    <script>
-    (async function() {
-        // Initialize Map
-        const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        const files = [
+            'Buildings_Residential_Zones_part1.geojson',
+            'Buildings_Residential_Zones_part2.geojson',
+            'Buildings_Residential_Zones_part3.geojson',
+            'Buildings_Residential_Zones_part4.geojson'
+        ];
 
-        const buildingsLayer = L.layerGroup().addTo(map);
-        const drawnItems = new L.FeatureGroup().addTo(map);
-        let allBuildings = [];
-
-        // Load Background Data
-        try {
-            const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
-
-            const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
-            L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
-
-            const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
-            for (const f of files) {
-                const data = await fetch(f).then(res => res.json());
-                allBuildings = allBuildings.concat(data.features);
-            }
-
-            // ✅ Removed all load-status messages
-        } catch (e) { 
-            // ✅ Removed error messages
+        for (const f of files) {
+            const data = await fetch(f).then(res => res.json());
+            allBuildings = allBuildings.concat(data.features);
         }
 
-        // Function to search buildings inside drawn shapes
-        function runBuildingSearch(filterShape) {
+    } catch (e) { 
+        console.error("Error loading GeoJSON files:", e);
+    }
+
+    // Function to search buildings inside drawn shapes
+    function runBuildingSearch(filterShape) {
+        buildingsLayer.clearLayers();
+
+        const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
+        const results = allBuildings.filter(building => {
+            const bBox = turf.bboxPolygon(turf.bbox(building));
+            if (!turf.booleanIntersects(searchBbox, bBox)) return false;
+            return turf.booleanIntersects(building, filterShape);
+        });
+
+        document.getElementById('count-display').innerText = results.length.toLocaleString();
+
+        if (results.length > 0) {
+            L.geoJSON(results, {
+                style: { color: '#00b894', weight: 1, fillOpacity: 0.6 }, // ✅ All green
+                interactive: false
+            }).addTo(buildingsLayer);
+        }
+    }
+
+    // Drawing Tools (only draw, no edit/delete buttons)
+    const drawControl = new L.Control.Draw({
+        draw: { 
+            polyline: false, 
+            marker: false, 
+            circlemarker: false, 
+            polygon: true, 
+            rectangle: true, 
+            circle: true 
+        },
+        edit: false
+    });
+    map.addControl(drawControl);
+
+    map.on('draw:created', function(e) {
+        drawnItems.clearLayers();
+        const layer = e.layer;
+        drawnItems.addLayer(layer);
+
+        let geoJSON;
+        if (layer instanceof L.Circle) {
+            const center = layer.getLatLng();
+            const radiusKms = layer.getRadius() / 1000;
+            geoJSON = turf.circle([center.lng, center.lat], radiusKms, { units: 'kilometers' });
+        } else {
+            geoJSON = layer.toGeoJSON();
+        }
+
+        runBuildingSearch(geoJSON);
+    });
+
+    // Manual Reset Button (Broom)
+    const cleaner = L.control({position: 'topright'});
+    cleaner.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+        div.onclick = (e) => {
+            e.preventDefault();
             buildingsLayer.clearLayers();
-            
-            const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
-            const results = allBuildings.filter(building => {
-                const bBox = turf.bboxPolygon(turf.bbox(building));
-                if (!turf.booleanIntersects(searchBbox, bBox)) return false;
-                return turf.booleanIntersects(building, filterShape);
-            });
-
-            document.getElementById('count-display').innerText = results.length.toLocaleString();
-
-            if (results.length > 0) {
-                L.geoJSON(results, {
-                    style: (f) => ({ color: f.properties?.OSM ? '#d63031' : '#00b894', weight: 1, fillOpacity: 0.6 }),
-                    interactive: false
-                }).addTo(buildingsLayer);
-            }
-        }
-
-        // Drawing Tools (only draw, no edit/delete buttons)
-        const drawControl = new L.Control.Draw({
-            draw: { 
-                polyline: false, 
-                marker: false, 
-                circlemarker: false, 
-                polygon: true, 
-                rectangle: true, 
-                circle: true 
-            },
-            edit: false // completely remove edit/delete buttons
-        });
-        map.addControl(drawControl);
-
-        map.on('draw:created', function(e) {
-            drawnItems.clearLayers(); // Clear previous shapes
-            const layer = e.layer;
-            drawnItems.addLayer(layer);
-
-            let geoJSON;
-            if (layer instanceof L.Circle) {
-                const center = layer.getLatLng();
-                const radiusKms = layer.getRadius() / 1000;
-                geoJSON = turf.circle([center.lng, center.lat], radiusKms, { units: 'kilometers' });
-            } else {
-                geoJSON = layer.toGeoJSON();
-            }
-
-            runBuildingSearch(geoJSON);
-        });
-
-        // Manual Reset Button (Broom)
-        const cleaner = L.control({position: 'topright'});
-        cleaner.onAdd = () => {
-            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
-            div.onclick = (e) => {
-                e.preventDefault();
-                buildingsLayer.clearLayers();
-                drawnItems.clearLayers();
-                document.getElementById('count-display').innerText = "0";
-            };
-            return div;
+            drawnItems.clearLayers();
+            document.getElementById('count-display').innerText = "0";
         };
-        cleaner.addTo(map);
+        return div;
+    };
+    cleaner.addTo(map);
 
-    })();
-    </script>
-</body>
-</html>
+})();
