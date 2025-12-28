@@ -2,104 +2,134 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Residential Buildings</title>
-    
+    <title>Huntsville Map - Interactive Buildings</title>
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
+    <!-- Leaflet.draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
     <style>
-        /* Remove default margins and make map full viewport height */
-        body { margin: 0; padding: 0; }
+        body { margin:0; padding:0; }
         #map { height: 100vh; }
     </style>
 </head>
 <body>
-    <!-- Map container -->
     <div id="map"></div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-   <script>
-    // 1️⃣ Initialize map with Canvas renderer
-    const map = L.map('map', {
-        renderer: L.canvas(),
-        preferCanvas: true
-    }).setView([34.7304, -86.5861], 12);
 
-    // 2️⃣ Base map
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-    }).addTo(map);
+    <!-- Leaflet.draw JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
-    // 3️⃣ Block Groups (tooltips kept)
-    fetch('Huntsville_Block_Groups.geojson')
-        .then(res => res.json())
-        .then(geojson => {
-            L.geoJSON(geojson, {
-                style: { color: 'black', weight: 1, fillOpacity: 0 },
-                onEachFeature: (feature, layer) => {
-                    if (feature.properties) {
-                        layer.bindTooltip(
-                            `<b>Block Group:</b> ${feature.properties.NAMELSAD}<br>
-                             <b>GEOID:</b> ${feature.properties.GEOIDFQ}`
-                        );
-                    }
-                }
-            }).addTo(map);
-        });
+    <!-- Turf.js for spatial intersections -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
-    // 4️⃣ City boundary
-    fetch('Boundary_City_Huntsville_poly.geojson')
-        .then(res => res.json())
-        .then(geojson => {
-            const cityLayer = L.geoJSON(geojson, {
-                style: {
-                    color: 'orange',
-                    weight: 2,
-                    fillColor: 'orange',
-                    fillOpacity: 0.3
-                }
-            }).addTo(map);
+    <script>
+    (async function() {
+        // 1️⃣ Initialize map with Canvas renderer
+        const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
 
-            map.fitBounds(cityLayer.getBounds());
-        });
+        // 2️⃣ Base map
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-    // 5️⃣ Buildings layer group (merge Part1 + Part2)
-    const buildingsLayer = L.layerGroup().addTo(map);
+        // 3️⃣ Block Groups
+        let blockGroupsLayer = L.geoJSON(null, {
+            style: { color: 'black', weight: 1, fillOpacity: 0 },
+            onEachFeature: (feature, layer) => {
+                layer.on('click', () => {
+                    showBuildingsInPolygon(feature);
+                });
+            }
+        }).addTo(map);
 
-    function loadBuildings(url) {
-        fetch(url)
-            .then(res => res.json())
-            .then(geojson => {
-                L.geoJSON(geojson, {
-                    interactive: false,   // no tooltips
-                    style: {
-                        color: 'darkgreen',
-                        weight: 0.3,        // thin stroke for speed
-                        fillOpacity: 0.6
-                    }
+        const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+        blockGroupsLayer.addData(blockGroupsData);
+
+        // 4️⃣ City boundary
+        const cityBoundary = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+        const cityLayer = L.geoJSON(cityBoundary, {
+            style: { color: 'orange', weight: 2, fillColor: 'orange', fillOpacity: 0.3 }
+        }).addTo(map);
+        map.fitBounds(cityLayer.getBounds());
+
+        // 5️⃣ Prepare buildings in memory
+        let allBuildings = [];
+
+        async function loadBuildings(url) {
+            const geojson = await fetch(url).then(r => r.json());
+            allBuildings = allBuildings.concat(geojson.features);
+        }
+
+        await loadBuildings('Huntsville Residential Buildings Part1.geojson');
+        await loadBuildings('Huntsville Residential Buildings Part2.geojson');
+        await loadBuildings('OSMCombinedUnique_with_GEOIDFQ.geojson');
+
+        const buildingsLayer = L.layerGroup().addTo(map);
+
+        // 6️⃣ Function to display buildings intersecting a polygon
+        function showBuildingsInPolygon(filterPolygon) {
+            buildingsLayer.clearLayers();
+            const filtered = allBuildings.filter(f => turf.booleanIntersects(f, filterPolygon));
+
+            filtered.forEach(f => {
+                const isOSM = f.properties && f.properties.OSM; // adjust if your OSM features have a flag
+                const color = isOSM ? 'darkred' : 'darkgreen';
+
+                L.geoJSON(f, {
+                    interactive: false,
+                    style: { color: color, weight: 0.3, fillOpacity: 0.6 }
                 }).addTo(buildingsLayer);
             });
-    }
+        }
 
-    // 6️⃣ Load both Microsoft building files immediately
-    loadBuildings('Huntsville_Residential_Buildings_Part1.geojson');
-    loadBuildings('Huntsville_Residential_Buildings_Part2.geojson');
-
-    // 7️⃣ Load OSM-only buildings immediately
-    fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
-        .then(res => res.json())
-        .then(geojson => {
-            L.geoJSON(geojson, {
-                interactive: false,
-                style: {
-                    color: 'darkred',
-                    weight: 0.3,
-                    fillColor: 'darkred',
-                    fillOpacity: 0.6
-                }
-            }).addTo(map);
+        // 7️⃣ Leaflet.draw setup
+        const drawControl = new L.Control.Draw({
+            draw: {
+                polyline: false,
+                marker: false,
+                circlemarker: false,
+                polygon: true,
+                rectangle: true,
+                circle: true
+            },
+            edit: false
         });
-</script>
+        map.addControl(drawControl);
+
+        map.on('draw:created', function(e) {
+            const layer = e.layer;
+            let drawnGeoJSON;
+
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                drawnGeoJSON = turf.circle([center.lng, center.lat], layer.getRadius()/1000, {units:'kilometers'});
+            } else {
+                drawnGeoJSON = layer.toGeoJSON();
+            }
+
+            showBuildingsInPolygon(drawnGeoJSON);
+        });
+
+        // 8️⃣ Clear button
+        const clearButton = L.control({position: 'topright'});
+        clearButton.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            div.innerHTML = '<a href="#" title="Clear Buildings" style="font-size:16px;line-height:24px;">🧹</a>';
+            div.style.backgroundColor = 'white';
+            div.style.width = '34px';
+            div.style.height = '34px';
+            div.style.textAlign = 'center';
+            div.style.cursor = 'pointer';
+            div.onclick = function() {
+                buildingsLayer.clearLayers();
+            };
+            return div;
+        };
+        clearButton.addTo(map);
+    })();
+    </script>
 </body>
 </html>
