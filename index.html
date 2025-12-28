@@ -19,7 +19,7 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
+   <script>
     // 1️⃣ Initialize map with Canvas renderer
     const map = L.map('map', {
         renderer: L.canvas(),
@@ -31,16 +31,12 @@
         maxZoom: 19
     }).addTo(map);
 
-    // 3️⃣ Block Groups (keep tooltips — not too many features)
+    // 3️⃣ Block Groups (tooltips kept)
     fetch('Huntsville_Block_Groups.geojson')
         .then(res => res.json())
         .then(geojson => {
             L.geoJSON(geojson, {
-                style: {
-                    color: 'black',
-                    weight: 1,
-                    fillOpacity: 0
-                },
+                style: { color: 'black', weight: 1, fillOpacity: 0 },
                 onEachFeature: (feature, layer) => {
                     if (feature.properties) {
                         layer.bindTooltip(
@@ -68,45 +64,29 @@
             map.fitBounds(cityLayer.getBounds());
         });
 
-    // 5️⃣ Buildings layer group (Part1 + Part2 merged in memory)
-    const buildingsLayer = L.layerGroup();
-
-    let buildingsLoaded = false;
-    const BUILDINGS_ZOOM_LEVEL = 14;
+    // 5️⃣ Buildings layer group (merge Part1 + Part2)
+    const buildingsLayer = L.layerGroup().addTo(map);
 
     function loadBuildings(url) {
         fetch(url)
             .then(res => res.json())
             .then(geojson => {
                 L.geoJSON(geojson, {
-                    interactive: false,   // 🚀 huge performance win
+                    interactive: false,   // no tooltips
                     style: {
                         color: 'darkgreen',
-                        weight: 0.3,        // thinner stroke = faster
+                        weight: 0.3,        // thin stroke for speed
                         fillOpacity: 0.6
                     }
                 }).addTo(buildingsLayer);
             });
     }
 
-    // 6️⃣ Load buildings ONLY when zoomed in
-    map.on('zoomend', () => {
-        if (map.getZoom() >= BUILDINGS_ZOOM_LEVEL && !buildingsLoaded) {
-            loadBuildings('Huntsville_Residential_Buildings_Part1.geojson');
-            loadBuildings('Huntsville_Residential_Buildings_Part2.geojson');
+    // 6️⃣ Load both Microsoft building files immediately
+    loadBuildings('Huntsville_Residential_Buildings_Part1.geojson');
+    loadBuildings('Huntsville_Residential_Buildings_Part2.geojson');
 
-            buildingsLayer.addTo(map);
-            buildingsLoaded = true;
-        }
-
-        // Optional: remove buildings when zoomed out
-        if (map.getZoom() < BUILDINGS_ZOOM_LEVEL && buildingsLoaded) {
-            map.removeLayer(buildingsLayer);
-            buildingsLoaded = false;
-        }
-    });
-
-    // 7️⃣ Optional: OSM-only buildings (same optimization)
+    // 7️⃣ Load OSM-only buildings immediately
     fetch('OSMCombinedUnique_with_GEOIDFQ.geojson')
         .then(res => res.json())
         .then(geojson => {
