@@ -126,37 +126,7 @@
         };
         cleaner.addTo(map);
 
-        // Search Bar Control
-const searchControl = L.control({ position: 'topright' }); // 'position' mostly determines stacking in Leaflet
-
-searchControl.onAdd = function(map) {
-    const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-    
-    // Style and position
-    div.innerHTML = `
-        <input type="text" id="search-box" placeholder="Search..." 
-            style="
-                width: 150px; 
-                padding: 4px; 
-                border: 1px solid #ccc; 
-                border-radius: 4px;
-                position: absolute;
-                top: 30px; 
-                right: 80px;
-                z-index: 1001;
-            ">
-    `;
-    
-    // Prevent map from reacting to clicks/typing
-    L.DomEvent.disableClickPropagation(div);
-    return div;
-};
-
-searchControl.addTo(map);
-
-
     })();
     </script>
 </body>
 </html>
-
