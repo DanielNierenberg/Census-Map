@@ -120,19 +120,27 @@
         });
         map.addControl(drawControl);
 
-        map.on('draw:created', function(e) {
-            const layer = e.layer;
-            let drawnGeoJSON;
+map.on('draw:created', function(e) {
+    const layer = e.layer;
+    let drawnFeature;
 
-            if (layer instanceof L.Circle) {
-                const center = layer.getLatLng();
-                drawnGeoJSON = turf.circle([center.lng, center.lat], layer.getRadius()/1000, {units:'kilometers'});
-            } else {
-                drawnGeoJSON = layer.toGeoJSON();
-            }
+    if (layer instanceof L.Circle) {
+        const center = layer.getLatLng();
+        drawnFeature = turf.circle([center.lng, center.lat], layer.getRadius()/1000, {units:'kilometers'});
+        // ensure it's a Feature
+        if (drawnFeature.type === 'FeatureCollection') {
+            drawnFeature = drawnFeature.features[0];
+        }
+    } else {
+        drawnFeature = layer.toGeoJSON();
+        // Leaflet sometimes outputs FeatureCollection for rectangles
+        if (drawnFeature.type === 'FeatureCollection') {
+            drawnFeature = drawnFeature.features[0];
+        }
+    }
 
-            showBuildingsInPolygon(drawnGeoJSON);
-        });
+    showBuildingsInPolygon(drawnFeature);
+});
 
         // 8️⃣ Clear button
         const clearButton = L.control({position: 'topright'});
