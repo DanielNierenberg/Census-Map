@@ -89,17 +89,21 @@ function showBuildingsInPolygon(filterPolygon) {
         }).addTo(buildingsLayer);
     });
 
-    // Add popup showing number of buildings
+    // Compute center for popup for all shapes
     let center;
     if (filterPolygon.geometry.type === 'Polygon' || filterPolygon.geometry.type === 'MultiPolygon') {
         center = turf.center(filterPolygon).geometry.coordinates;
     } else if (filterPolygon.geometry.type === 'Point') {
         center = filterPolygon.geometry.coordinates;
+    } else if (filterPolygon.type === 'Feature' && filterPolygon.geometry) {
+        // Handles Turf circle generated from Leaflet Circle
+        center = turf.center(filterPolygon).geometry.coordinates;
     } else {
         // fallback to map center
         center = [map.getCenter().lng, map.getCenter().lat];
     }
 
+    // Show popup with count
     L.popup()
      .setLatLng([center[1], center[0]])
      .setContent(`<b>${filtered.length}</b> building(s) displayed`)
