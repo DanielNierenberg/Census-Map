@@ -24,7 +24,7 @@
     <!-- Leaflet.draw JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
-    <!-- Turf.js for spatial intersections -->
+    <!-- Turf.js -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
@@ -36,17 +36,22 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
         // 3️⃣ Block Groups
-        let blockGroupsLayer = L.geoJSON(null, {
-            style: { color: 'black', weight: 1, fillOpacity: 0 },
-            onEachFeature: (feature, layer) => {
-                layer.on('click', () => {
-                    showBuildingsInPolygon(feature);
-                });
-            }
+        const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+        const blockGroupsLayer = L.geoJSON(blockGroupsData, {
+            style: { color: 'black', weight: 1, fillOpacity: 0 }
         }).addTo(map);
 
-        const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
-        blockGroupsLayer.addData(blockGroupsData);
+        // Add click event for block groups using proper Turf.js GeoJSON
+        blockGroupsLayer.eachLayer(layer => {
+            layer.on('click', () => {
+                const turfFeature = {
+                    type: "Feature",
+                    geometry: layer.feature.geometry,
+                    properties: layer.feature.properties
+                };
+                showBuildingsInPolygon(turfFeature);
+            });
+        });
 
         // 4️⃣ City boundary
         const cityBoundary = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
@@ -70,20 +75,36 @@
         const buildingsLayer = L.layerGroup().addTo(map);
 
         // 6️⃣ Function to display buildings intersecting a polygon
-        function showBuildingsInPolygon(filterPolygon) {
-            buildingsLayer.clearLayers();
-            const filtered = allBuildings.filter(f => turf.booleanIntersects(f, filterPolygon));
+function showBuildingsInPolygon(filterPolygon) {
+    buildingsLayer.clearLayers();
+    const filtered = allBuildings.filter(f => turf.booleanIntersects(f, filterPolygon));
 
-            filtered.forEach(f => {
-                const isOSM = f.properties && f.properties.OSM; // adjust if your OSM features have a flag
-                const color = isOSM ? 'darkred' : 'darkgreen';
+    filtered.forEach(f => {
+        const isOSM = f.properties && f.properties.OSM; // adjust if your OSM features have a flag
+        const color = isOSM ? 'darkred' : 'darkgreen';
 
-                L.geoJSON(f, {
-                    interactive: false,
-                    style: { color: color, weight: 0.3, fillOpacity: 0.6 }
-                }).addTo(buildingsLayer);
-            });
-        }
+        L.geoJSON(f, {
+            interactive: false,
+            style: { color: color, weight: 0.3, fillOpacity: 0.6 }
+        }).addTo(buildingsLayer);
+    });
+
+    // Add popup showing number of buildings
+    let center;
+    if (filterPolygon.geometry.type === 'Polygon' || filterPolygon.geometry.type === 'MultiPolygon') {
+        center = turf.center(filterPolygon).geometry.coordinates;
+    } else if (filterPolygon.geometry.type === 'Point') {
+        center = filterPolygon.geometry.coordinates;
+    } else {
+        // fallback to map center
+        center = [map.getCenter().lng, map.getCenter().lat];
+    }
+
+    L.popup()
+     .setLatLng([center[1], center[0]])
+     .setContent(`<b>${filtered.length}</b> building(s) displayed`)
+     .openOn(map);
+}
 
         // 7️⃣ Leaflet.draw setup
         const drawControl = new L.Control.Draw({
