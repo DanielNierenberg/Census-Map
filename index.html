@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Interactive Buildings</title>
+    <title>Huntsville Map - Draw to Count</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
@@ -11,28 +11,28 @@
         body { margin:0; padding:0; font-family: sans-serif; }
         #map { height: 100vh; }
         
-        /* The UI box for status and counts */
         #status-panel {
             position: absolute;
             top: 10px;
-            right: 50px;
+            right: 60px;
             z-index: 1000;
             background: white;
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            min-width: 150px;
+            border: 2px solid #3388ff;
         }
-        .loading { color: orange; font-weight: bold; }
-        .ready { color: green; font-weight: bold; }
-        .count-num { font-size: 1.2em; color: #007bff; display: block; margin-top: 5px; }
+        .count-num { font-size: 2em; color: #2d3436; font-weight: bold; display: block; }
+        .label { font-size: 0.9em; color: #636e72; text-transform: uppercase; letter-spacing: 1px; }
+        #load-status { font-size: 0.8em; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <div id="status-panel">
-        <div id="load-status" class="loading">Status: Loading Data...</div>
-        <div id="count-display">Buildings: 0</div>
+        <div id="load-status">⏳ Loading Huntsville Data...</div>
+        <span class="label">Buildings Found:</span>
+        <span id="count-display" class="count-num">0</span>
     </div>
 
     <div id="map"></div>
@@ -43,44 +43,33 @@
 
     <script>
     (async function() {
-        // 1️⃣ Initialize map
+        // 1. Setup Map
         const map = L.map('map', { 
             renderer: L.canvas(), 
             preferCanvas: true 
         }).setView([34.7304, -86.5861], 12);
 
-        // 2️⃣ Base map (OpenStreetMap)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-        // Layers for organization
         const buildingsLayer = L.layerGroup().addTo(map);
+        const drawnItems = new L.FeatureGroup().addTo(map); 
         let allBuildings = [];
 
-        // 3️⃣ Load Data
+        // 2. Load the Data
         try {
-            // Load City Boundary
+            // City Boundary
             const cityBoundary = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            const cityLayer = L.geoJSON(cityBoundary, {
-                style: { color: 'orange', weight: 2, fillColor: 'orange', fillOpacity: 0.1, interactive: false }
+            L.geoJSON(cityBoundary, {
+                style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false }
             }).addTo(map);
-            map.fitBounds(cityLayer.getBounds());
 
-            // Load Block Groups
+            // Block Groups (Lines Only - Interaction code completely removed)
             const blockGroupsData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             L.geoJSON(blockGroupsData, {
-                style: { color: 'black', weight: 0.5, fillOpacity: 0 },
-                onEachFeature: (feature, layer) => {
-                    layer.on('click', (e) => {
-                        L.DomEvent.stopPropagation(e);
-                        showBuildingsInPolygon(feature);
-                    });
-                }
+                style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false }
             }).addTo(map);
 
-            // Load Building Files
+            // Buildings
             const files = [
                 'Huntsville Residential Buildings Part1.geojson',
                 'Huntsville Residential Buildings Part2.geojson',
@@ -92,84 +81,76 @@
                 allBuildings = allBuildings.concat(data.features);
             }
 
-            // Update Status to Ready
-            document.getElementById('load-status').innerHTML = "Status: Ready ✅";
-            document.getElementById('load-status').className = "ready";
-
+            document.getElementById('load-status').innerHTML = "✅ Map Ready";
         } catch (err) {
-            document.getElementById('load-status').innerHTML = "Status: Error loading files";
-            console.error(err);
+            document.getElementById('load-status').innerHTML = "❌ Error Loading Data";
         }
 
-        // 4️⃣ The Calculation Engine (Optimized)
-        function showBuildingsInPolygon(filterShape) {
+        // 3. Calculation logic (BBox Optimized)
+        function updateMapSelection(shapeGeoJSON) {
             buildingsLayer.clearLayers();
             
-            // Fast Pre-filter using Bounding Box
-            const searchBbox = turf.bbox(filterShape);
+            const searchBbox = turf.bbox(shapeGeoJSON);
             const searchBboxPoly = turf.bboxPolygon(searchBbox);
 
             const filtered = allBuildings.filter(building => {
-                // Step 1: Quick math check (is it even in the neighborhood?)
                 const bBbox = turf.bbox(building);
-                const isNear = turf.booleanIntersects(searchBboxPoly, turf.bboxPolygon(bBbox));
-                
-                if (!isNear) return false;
-
-                // Step 2: Precise check (does it touch the actual shape?)
-                return turf.booleanIntersects(building, filterShape);
+                // Fast check
+                if (!turf.booleanIntersects(searchBboxPoly, turf.bboxPolygon(bBbox))) return false;
+                // Precise check
+                return turf.booleanIntersects(building, shapeGeoJSON);
             });
 
-            // Update the Count UI
-            document.getElementById('count-display').innerHTML = `Buildings: <span class="count-num">${filtered.length.toLocaleString()}</span>`;
+            document.getElementById('count-display').innerText = filtered.length.toLocaleString();
 
-            // Render Results on Map as one single layer for speed
             if (filtered.length > 0) {
                 L.geoJSON(filtered, {
                     interactive: false,
                     style: (f) => ({
-                        color: f.properties?.OSM ? 'darkred' : 'darkgreen',
-                        weight: 0.5,
-                        fillOpacity: 0.7
+                        color: f.properties?.OSM ? '#d63031' : '#00b894',
+                        weight: 1,
+                        fillOpacity: 0.6
                     })
                 }).addTo(buildingsLayer);
             }
         }
 
-        // 5️⃣ Drawing Tools Setup
+        // 4. Drawing Tools
         const drawControl = new L.Control.Draw({
             draw: {
                 polyline: false, marker: false, circlemarker: false,
                 polygon: true, rectangle: true, circle: true
             },
-            edit: false
+            edit: { featureGroup: drawnItems, remove: true }
         });
         map.addControl(drawControl);
 
         map.on('draw:created', function(e) {
+            drawnItems.clearLayers(); // Remove previous shape
             const layer = e.layer;
-            let shapeGeoJSON;
+            drawnItems.addLayer(layer);
 
+            let shapeGeoJSON;
             if (layer instanceof L.Circle) {
                 const center = layer.getLatLng();
-                // Convert Leaflet circle to Turf polygon
                 shapeGeoJSON = turf.circle([center.lng, center.lat], layer.getRadius()/1000, {units:'kilometers'});
             } else {
                 shapeGeoJSON = layer.toGeoJSON();
             }
 
-            showBuildingsInPolygon(shapeGeoJSON);
+            updateMapSelection(shapeGeoJSON);
         });
 
-        // 6️⃣ Clear Button
+        // 5. Clear Button
         const clearButton = L.control({position: 'topright'});
         clearButton.onAdd = function() {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" title="Clear All" style="font-size:18px; text-decoration:none; background:white; width:34px; height:34px; display:flex; align-items:center; justify-content:center;">🧹</a>';
+            div.innerHTML = '<a href="#" title="Reset Map" style="font-size:18px; background:white; width:34px; height:34px; display:flex; align-items:center; justify-content:center; text-decoration:none;">🧹</a>';
             div.onclick = function(e) {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
-                document.getElementById('count-display').innerHTML = "Buildings: 0";
+                drawnItems.clearLayers();
+                document.getElementById('count-display').innerText = "0";
             };
             return div;
         };
