@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville Map - Minimal Draw</title>
+    <title>Huntsville Map - Minimal Draw with Search</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     <style>
         body { margin:0; padding:0; font-family: sans-serif; }
         #map { height: 100vh; }
+
+        /* Status Panel */
         #status-panel {
             position: absolute; top: 10px; right: 60px; z-index: 1000;
             background: white; padding: 15px; border-radius: 8px;
@@ -15,6 +17,41 @@
         }
         .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
         .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
+
+        /* Search Panel */
+        #search-panel {
+            position: absolute; top: 10px; right: 100px; z-index: 1000;
+            background: white; padding: 10px 15px; border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
+            width: 250px;
+            display: flex; flex-direction: column;
+        }
+        #address-input {
+            padding: 5px 8px; border-radius: 4px; border: 1px solid #ccc; width: 100%;
+            box-sizing: border-box;
+        }
+        #go-btn {
+            margin-top: 5px;
+            padding: 5px; border-radius: 4px; border: none; background: #3388ff;
+            color: white; font-weight: bold; cursor: pointer;
+        }
+        #suggestions {
+            margin: 5px 0 0 0; padding: 0; list-style: none; max-height: 150px; overflow-y: auto;
+            border: 1px solid #ccc; border-radius: 4px; background: white;
+            display: none;
+        }
+        #suggestions li {
+            padding: 5px; cursor: pointer;
+        }
+        #suggestions li:hover {
+            background: #f1f1f1;
+        }
+
+        /* Broom Button */
+        .leaflet-bar a {
+            display: flex; align-items: center; justify-content: center; text-decoration: none;
+            background: white; width: 34px; height: 34px; font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -22,6 +59,12 @@
     <div id="status-panel">
         <span class="label">Total Residential Buildings:</span>
         <span id="count-display" class="count-num">0</span>
+    </div>
+
+    <div id="search-panel">
+        <input type="text" id="address-input" placeholder="Search Huntsville addresses..." autocomplete="off" />
+        <button id="go-btn">Go</button>
+        <ul id="suggestions"></ul>
     </div>
 
     <div id="map"></div>
@@ -53,11 +96,7 @@
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
             }
-
-            // ✅ Removed all load-status messages
-        } catch (e) { 
-            // ✅ Removed error messages
-        }
+        } catch (e) { console.error(e); }
 
         // Function to search buildings inside drawn shapes
         function runBuildingSearch(filterShape) {
@@ -80,22 +119,15 @@
             }
         }
 
-        // Drawing Tools (only draw, no edit/delete buttons)
+        // Drawing Tools
         const drawControl = new L.Control.Draw({
-            draw: { 
-                polyline: false, 
-                marker: false, 
-                circlemarker: false, 
-                polygon: true, 
-                rectangle: true, 
-                circle: true 
-            },
-            edit: false // completely remove edit/delete buttons
+            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
+            edit: false
         });
         map.addControl(drawControl);
 
         map.on('draw:created', function(e) {
-            drawnItems.clearLayers(); // Clear previous shapes
+            drawnItems.clearLayers();
             const layer = e.layer;
             drawnItems.addLayer(layer);
 
@@ -115,7 +147,7 @@
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+            div.innerHTML = '<a href="#">🧹</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
@@ -125,6 +157,51 @@
             return div;
         };
         cleaner.addTo(map);
+
+        // ---------------- Address Search ----------------
+        const input = document.getElementById('address-input');
+        const suggestionsEl = document.getElementById('suggestions');
+        const goBtn = document.getElementById('go-btn');
+        let selectedLocation = null;
+
+        // Huntsville bounding box [west, south, east, north]
+        const huntsvilleBbox = [-86.7156, 34.63, -86.53, 34.82];
+
+        input.addEventListener('input', async () => {
+            const query = input.value.trim();
+            if (!query) { suggestionsEl.style.display = 'none'; return; }
+
+            try {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&viewbox=${huntsvilleBbox[0]},${huntsvilleBbox[3]},${huntsvilleBbox[2]},${huntsvilleBbox[1]}&bounded=1&q=${encodeURIComponent(query)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                suggestionsEl.innerHTML = '';
+                data.forEach(place => {
+                    const li = document.createElement('li');
+                    li.textContent = place.display_name;
+                    li.onclick = () => {
+                        input.value = place.display_name;
+                        selectedLocation = place;
+                        suggestionsEl.style.display = 'none';
+                    };
+                    suggestionsEl.appendChild(li);
+                });
+
+                suggestionsEl.style.display = data.length ? 'block' : 'none';
+            } catch (err) {
+                console.error(err);
+                suggestionsEl.style.display = 'none';
+            }
+        });
+
+        goBtn.addEventListener('click', () => {
+            if (selectedLocation) {
+                const lat = parseFloat(selectedLocation.lat);
+                const lon = parseFloat(selectedLocation.lon);
+                map.setView([lat, lon], 18);
+            }
+        });
 
     })();
     </script>
