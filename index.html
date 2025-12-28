@@ -1,49 +1,39 @@
-<style>
-    body { margin:0; padding:0; font-family: sans-serif; }
-    #map { height: 100vh; }
-    
-    /* Container for all right-side controls to ensure they stack */
-    .right-panel-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-end;
-    }
-
-    /* 1. STATUS PANEL */
-    .status-panel-ui {
-        background: white; padding: 12px; border-radius: 8px;
-        box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
-        width: 200px; text-align: center;
-    }
-    .count-num { font-size: 2em; color: #2d3436; font-weight: bold; display: block; }
-    .label { font-size: 0.75em; color: #636e72; text-transform: uppercase; font-weight: bold; }
-
-    /* 2. SEARCH BOX */
-    .search-box-container {
-        background: white; padding: 10px; border-radius: 8px;
-        box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-        width: 200px;
-    }
-    #roadSearch { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 4px; }
-    .btn-row { display: flex; gap: 5px; }
-    .btn-row button { flex: 1; cursor: pointer; padding: 6px; background: #f8f9fa; border: 1px solid #ccc; border-radius: 4px; }
-
-    /* 3. AUTOCOMPLETE */
-    .suggestions {
-        position: absolute; background: white; border: 1px solid #ccc;
-        max-height: 180px; overflow-y: auto; z-index: 5000; /* High z-index */
-        display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    .suggestions div { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px; }
-    .suggestions div:hover { background-color: #f0f0f0; }
-</style>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Huntsville Map - Fixed Shape Logic</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <style>
+        body { margin:0; padding:0; font-family: sans-serif; }
+        #map { height: 100vh; }
+        #status-panel {
+            position: absolute; top: 10px; right: 60px; z-index: 1000;
+            background: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); border: 2px solid #3388ff;
+        }
+        .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
+        .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
+    </style>
+</head>
 <body>
+
+    <div id="status-panel">
+        <div id="load-status">⏳ Loading Data...</div>
+        <span class="label">Buildings Inside Shape:</span>
+        <span id="count-display" class="count-num">0</span>
+    </div>
+
     <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
     (async function() {
+        // Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -51,42 +41,81 @@
         const drawnItems = new L.FeatureGroup().addTo(map);
         let allBuildings = [];
 
-        // --- RIGHT SIDE CONTROLS ---
-        // We create one control for the Count and one for the Search to let Leaflet stack them
-        
-        // 1. Count Panel
-        const countControl = L.control({ position: 'topright' });
-        countControl.onAdd = function() {
-            const div = L.DomUtil.create('div', 'status-panel-ui');
-            div.innerHTML = `
-                <div id="load-status">⏳ Loading...</div>
-                <span class="label">Buildings Inside Shape</span>
-                <span id="count-display" class="count-num">0</span>`;
-            return div;
-        };
-        countControl.addTo(map);
+        // 1. Load Background Data (Visual Only)
+        try {
+            const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
 
-        // 2. Search Panel
-        const searchControl = L.control({ position: 'topright' });
-        searchControl.onAdd = function() {
-            const div = L.DomUtil.create('div', 'search-box-container');
-            div.innerHTML = `<b>Locate Road</b><br>
-                <input type="text" id="roadSearch" placeholder="Street name..." autocomplete="off"/>
-                <div class="btn-row">
-                    <button id="searchBtn">Go</button>
-                    <button id="clearSearchBtn">Clear</button>
-                </div>`;
-            // Stop map clicks from firing when clicking inside the search box
-            L.DomEvent.disableClickPropagation(div);
-            return div;
-        };
-        searchControl.addTo(map);
+            const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+            // WE REMOVED ONCLICK COMPLETELY HERE
+            L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
-        // 3. Broom (Cleaner) - Leaflet will put this below the Search automatically
+            const files = ['Huntsville Residential Buildings Part1.geojson', 'Huntsville Residential Buildings Part2.geojson', 'OSMCombinedUnique_with_GEOIDFQ.geojson'];
+            for (const f of files) {
+                const data = await fetch(f).then(res => res.json());
+                allBuildings = allBuildings.concat(data.features);
+            }
+            document.getElementById('load-status').innerHTML = "✅ Ready";
+        } catch (e) { document.getElementById('load-status').innerHTML = "❌ Error Loading Files"; }
+
+        // 2. The Search Function
+        // This ONLY runs when a shape is finished drawing
+        function runBuildingSearch(filterShape) {
+            buildingsLayer.clearLayers();
+            
+            // Optimization: Get bounding box of the shape
+            const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
+
+            const results = allBuildings.filter(building => {
+                // Step 1: Quick BBox check
+                const bBox = turf.bboxPolygon(turf.bbox(building));
+                if (!turf.booleanIntersects(searchBbox, bBox)) return false;
+
+                // Step 2: Real intersection (Counts if any part of building is inside)
+                return turf.booleanIntersects(building, filterShape);
+            });
+
+            document.getElementById('count-display').innerText = results.length.toLocaleString();
+
+            if (results.length > 0) {
+                L.geoJSON(results, {
+                    style: (f) => ({ color: f.properties?.OSM ? '#d63031' : '#00b894', weight: 1, fillOpacity: 0.6 }),
+                    interactive: false
+                }).addTo(buildingsLayer);
+            }
+        }
+
+        // 3. Drawing Tools
+        const drawControl = new L.Control.Draw({
+            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
+            edit: { featureGroup: drawnItems, remove: true }
+        });
+        map.addControl(drawControl);
+
+        map.on('draw:created', function(e) {
+            drawnItems.clearLayers(); // Clear old shapes
+            const layer = e.layer;
+            drawnItems.addLayer(layer);
+
+            let geoJSON;
+            // SPECIAL FIX FOR CIRCLES:
+            if (layer instanceof L.Circle) {
+                const center = layer.getLatLng();
+                const radiusKms = layer.getRadius() / 1000;
+                geoJSON = turf.circle([center.lng, center.lat], radiusKms, {units: 'kilometers'});
+            } else {
+                // Fix for Rectangles and Polygons
+                geoJSON = layer.toGeoJSON();
+            }
+
+            runBuildingSearch(geoJSON);
+        });
+
+        // 4. Manual Reset (The Broom Icon)
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" title="Clear All" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;">🧹</a>';
+            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
@@ -97,16 +126,7 @@
         };
         cleaner.addTo(map);
 
-        // --- DRAWING TOOLS (LEFT SIDE) ---
-        const drawControl = new L.Control.Draw({
-            position: 'topleft',
-            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
-            edit: { featureGroup: drawnItems, remove: true }
-        });
-        map.addControl(drawControl);
-
-        // (The rest of your Road Search logic and Building Search logic goes here...)
-        // Ensure you use document.getElementById('roadSearch') AFTER searchControl.addTo(map)
     })();
     </script>
 </body>
+</html>
