@@ -17,7 +17,6 @@
         .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
         .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
 
-        /* Search Panel */
         #search-panel {
             position: absolute;
             top: 50%; right: 20px;
@@ -83,7 +82,6 @@
 
     <script>
     (async function() {
-        // Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -91,7 +89,6 @@
         const drawnItems = new L.FeatureGroup().addTo(map);
         let allBuildings = [];
 
-        // Load Background Data
         try {
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
             L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
@@ -110,7 +107,6 @@
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
             }
-
         } catch (e) { 
             console.error("Error loading GeoJSON files:", e);
         }
@@ -134,7 +130,9 @@
             }
         }
 
-        // Drawing Tools - Updated for Imperial Units (Miles)
+        // Custom formatting to force Miles even for small distances
+        L.drawLocal.draw.handlers.circle.radius = 'Radius (miles)';
+        
         const drawControl = new L.Control.Draw({
             draw: { 
                 polyline: false, 
@@ -143,13 +141,28 @@
                 polygon: true, 
                 rectangle: true, 
                 circle: {
-                    metric: false, // Disables meters/km
-                    feet: false    // Keeps it in Miles
+                    showRadius: true,
+                    metric: false,
+                    feet: false,
+                    nautic: false,
+                    precision: 2
                 } 
             },
             edit: false
         });
         map.addControl(drawControl);
+
+        // Override the tooltip display during drawing to force "miles"
+        map.on('draw:drawstep', function(e) {
+            if (e.tool instanceof L.Draw.Circle) {
+                const radiusMeters = e.tool._shape.getRadius();
+                const radiusMiles = (radiusMeters * 0.000621371).toFixed(2);
+                e.tool._tooltip.updateContent({
+                    text: 'Radius: ' + radiusMiles + ' miles',
+                    subtext: ''
+                });
+            }
+        });
 
         map.on('draw:created', function(e) {
             drawnItems.clearLayers();
@@ -159,13 +172,11 @@
             let geoJSON;
             if (layer instanceof L.Circle) {
                 const center = layer.getLatLng();
-                // Convert radius from Meters to Miles for Turf calculation
                 const radiusMiles = layer.getRadius() * 0.000621371;
                 geoJSON = turf.circle([center.lng, center.lat], radiusMiles, { units: 'miles' });
             } else {
                 geoJSON = layer.toGeoJSON();
             }
-
             runBuildingSearch(geoJSON);
         });
 
@@ -245,7 +256,6 @@
                 .bindTooltip(addressName, { permanent: true, direction: 'top', offset: [0, -10] })
                 .openTooltip();
         });
-
     })();
     </script>
 </body>
