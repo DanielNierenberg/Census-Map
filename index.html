@@ -82,6 +82,13 @@
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
+
+            L.drawLocal.draw.handlers.circle.tooltip.start = 'Click and drag to draw circle.';
+    L.drawLocal.draw.handlers.circle.tooltip.cont = function (radius) {
+        const miles = radius * 0.000621371;
+        return `Radius: ${miles.toFixed(2)} miles`;
+    };
+        
     (async function() {
         // Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
@@ -136,6 +143,8 @@
                 }).addTo(buildingsLayer);
             }
         }
+
+</script>
 
         // Drawing Tools
         const drawControl = new L.Control.Draw({
