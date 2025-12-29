@@ -82,7 +82,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <script>
-        
     (async function() {
         // Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
@@ -137,8 +136,6 @@
                 }).addTo(buildingsLayer);
             }
         }
-
-</script>
 
         // Drawing Tools
         const drawControl = new L.Control.Draw({
@@ -258,6 +255,7 @@
             }
 
             map.setView(selectedCoords, 18);
+            L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 }).addTo(map);
             
             // Add new marker with tooltip
             const addressName = searchInput.value;
