@@ -130,7 +130,7 @@
 
             // 3. Load Geometries
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
+            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
 
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             
