@@ -18,17 +18,18 @@
         .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
 
         /* Search Panel */
-        #search-panel {
-            position: absolute;
-            top: 50%; right: 20px;
-            transform: translateY(-50%);
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            width: 250px;
-            z-index: 1000;
-        }
+      #search-panel {
+    position: absolute;
+    top: 85px; /* Adjust this number to move it closer or further from the status panel */
+    right: 20px;
+    /* REMOVE the transform: translateY(-50%); line */
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    width: 250px;
+    z-index: 1000;
+}
 
         #address-search {
             width: 100%;
