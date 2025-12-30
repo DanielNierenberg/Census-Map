@@ -41,6 +41,25 @@
         .btn-radius { background: #3388ff; color: white; border: none; font-weight: bold; }
         
         select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; width: 200px; }
+
+        /* Legend Styling */
+        .info.legend {
+            padding: 10px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255,0.9);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+            line-height: 18px;
+            color: #555;
+        }
+        .info.legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -75,6 +94,7 @@
 
     <script>
     (async function() {
+        // 1. Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -89,7 +109,7 @@
 
         // Helper: Get color based on value (Shades of Purple)
         function getColor(v, max) {
-            if (max === 0) return '#f2f0f7';
+            if (max === 0 || !v) return '#f2f0f7';
             const pct = v / max;
             return pct > 0.8 ? '#3f007d' :
                    pct > 0.6 ? '#6a51a3' :
@@ -99,25 +119,21 @@
         }
 
         try {
-            // 1. Load CSV Data
+            // 2. Load CSV Data
             const csvResponse = await fetch('Sex by Age - Truncated Cleaned.csv');
             const csvText = await csvResponse.text();
             const parsedCsv = Papa.parse(csvText, { header: true, dynamicTyping: true });
             
-            // Create a lookup map for the CSV data
             parsedCsv.data.forEach(row => {
-                if (row.Geography) {
-                    csvDataMap[row.Geography] = row;
-                }
+                if (row.Geography) csvDataMap[row.Geography] = row;
             });
 
-            // 2. Load Geometries
+            // 3. Load Geometries
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
+            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
 
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             
-            // Initialize the Block Group Layer
             blockGroupLayer = L.geoJSON(bgData, {
                 style: { color: 'black', weight: 1, fillOpacity: 0 },
                 onEachFeature: (feature, layer) => {
@@ -125,19 +141,36 @@
                         const selectedCol = document.getElementById('csv-dropdown').value;
                         if (selectedCol !== 'default') {
                             const geoid = feature.properties.GEOIDFQ;
-                            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : "No Data";
-                            layer.bindTooltip(`<strong>${selectedCol}:</strong> ${val}`).openTooltip();
-                            this.setStyle({ weight: 3, color: '#666' });
+                            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+                            layer.bindTooltip(`<strong>${selectedCol}:</strong> ${val.toLocaleString()}`).openTooltip();
+                            this.setStyle({ weight: 3, color: '#333' });
                         }
                     });
+
                     layer.on('mouseout', function(e) {
+                        const selectedCol = document.getElementById('csv-dropdown').value;
+                        if (selectedCol === 'default') {
+                            blockGroupLayer.resetStyle(this);
+                        } else {
+                            // Persistent style recalculation to prevent "erasing"
+                            const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
+                            const maxVal = Math.max(...values);
+                            const geoid = feature.properties.GEOIDFQ;
+                            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+                            
+                            this.setStyle({
+                                fillColor: getColor(val, maxVal),
+                                fillOpacity: 0.7,
+                                color: 'black',
+                                weight: 1
+                            });
+                        }
                         layer.closeTooltip();
-                        blockGroupLayer.resetStyle(this);
                     });
                 }
             }).addTo(map);
 
-            // Load other data as before
+            // 4. Load Buildings and Addresses
             const buildingFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
             for (const f of buildingFiles) {
                 const data = await fetch(f).then(res => res.json());
@@ -152,14 +185,37 @@
 
         } catch (e) { console.error("Error loading data:", e); }
 
-        // Dropdown Change Logic
+        // 5. Legend Logic Function
+        const legend = L.control({position: 'bottomright'});
+        function updateLegend(selectedCol) {
+            if (map.legend) { map.removeControl(map.legend); map.legend = null; }
+            if (selectedCol === 'default') return;
+
+            legend.onAdd = function (map) {
+                const div = L.DomUtil.create('div', 'info legend');
+                const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
+                const maxVal = Math.max(...values);
+                const grades = [0, Math.round(maxVal * 0.2), Math.round(maxVal * 0.4), Math.round(maxVal * 0.6), Math.round(maxVal * 0.8)];
+                
+                div.innerHTML = `<strong>${selectedCol}</strong><br>`;
+                for (let i = 0; i < grades.length; i++) {
+                    div.innerHTML +=
+                        '<i style="background:' + getColor(grades[i] + 1, maxVal) + '"></i> ' +
+                        grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+                }
+                return div;
+            };
+            legend.addTo(map);
+            map.legend = legend;
+        }
+
+        // 6. Combined Dropdown Change Logic
         document.getElementById('csv-dropdown').addEventListener('change', function(e) {
             const selectedCol = e.target.value;
             
             if (selectedCol === 'default') {
                 blockGroupLayer.setStyle({ fillOpacity: 0, color: 'black', weight: 1 });
             } else {
-                // Find max value for color scaling
                 const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
                 const maxVal = Math.max(...values);
 
@@ -169,14 +225,15 @@
                     return {
                         fillColor: getColor(val, maxVal),
                         fillOpacity: 0.7,
-                        color: 'white',
+                        color: 'black',
                         weight: 1
                     };
                 });
             }
+            updateLegend(selectedCol);
         });
 
-        // --- Keep Existing Search & Drawing Logic ---
+        // 7. Search & Drawing Tools
         function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
             const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
@@ -275,6 +332,7 @@
             return div;
         };
         zoomOutControl.addTo(map);
+
     })();
     </script>
 </body>
