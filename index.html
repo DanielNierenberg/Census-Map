@@ -60,6 +60,14 @@
             margin-top: 5px;
             cursor: pointer;
         }
+
+        /* Popup Styling */
+        .popup-container { text-align: center; padding: 5px; }
+        .popup-btn { 
+            display: block; width: 100%; margin: 5px 0; 
+            padding: 8px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc;
+        }
+        .btn-radius { background: #3388ff; color: white; border: none; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -70,7 +78,7 @@
     </div>
 
     <div id="search-panel">
-        <input type="text" id="address-search" placeholder="Type an address..." />
+        <input type="text" id="address-search" placeholder="Type an address..." autocomplete="off" />
         <ul id="suggestions"></ul>
         <button id="go-button">Go</button>
     </div>
@@ -83,44 +91,57 @@
 
     <script>
     (async function() {
-        // Initialize Map
+        // 1. Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         const buildingsLayer = L.layerGroup().addTo(map);
         const drawnItems = new L.FeatureGroup().addTo(map);
         let allBuildings = [];
+        let allAddresses = [];
+        let currentMarker = null;
+        let selectedCoords = null;
 
-        // Load Background Data
+        // 2. Load Background & Building Data
         try {
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
+            L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
 
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
-            // Load 4 Residential Buildings files
-            const files = [
+            const buildingFiles = [
                 'Buildings_Residential_Zones_part1.geojson',
                 'Buildings_Residential_Zones_part2.geojson',
                 'Buildings_Residential_Zones_part3.geojson',
                 'Buildings_Residential_Zones_part4.geojson'
             ];
 
-            for (const f of files) {
+            for (const f of buildingFiles) {
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
+            }
+
+            // Load Address Data
+            const addressFiles = [
+                'Street_Address_Inside_City_LatLon_part1.geojson',
+                'Street_Address_Inside_City_LatLon_part2.geojson'
+            ];
+
+            for (const f of addressFiles) {
+                const data = await fetch(f).then(res => res.json());
+                allAddresses = allAddresses.concat(data.features);
             }
 
         } catch (e) { 
             console.error("Error loading GeoJSON files:", e);
         }
 
-        // Function to search buildings inside drawn shapes
+        // 3. Building Search Logic
         function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
-
             const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
+            
             const results = allBuildings.filter(building => {
                 const bBox = turf.bboxPolygon(turf.bbox(building));
                 if (!turf.booleanIntersects(searchBbox, bBox)) return false;
@@ -131,22 +152,15 @@
 
             if (results.length > 0) {
                 L.geoJSON(results, {
-                    style: { color: '#00b894', weight: 1, fillOpacity: 0.6 }, // All green
+                    style: { color: '#00b894', weight: 1, fillOpacity: 0.6 },
                     interactive: false
                 }).addTo(buildingsLayer);
             }
         }
 
-        // Drawing Tools
+        // 4. Drawing Tools
         const drawControl = new L.Control.Draw({
-            draw: { 
-                polyline: false, 
-                marker: false, 
-                circlemarker: false, 
-                polygon: true, 
-                rectangle: true, 
-                circle: true 
-            },
+            draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true },
             edit: false
         });
         map.addControl(drawControl);
@@ -164,32 +178,98 @@
             } else {
                 geoJSON = layer.toGeoJSON();
             }
-
             runBuildingSearch(geoJSON);
         });
 
-        // Manual Reset Button (Broom)
+        // 5. Address Search UI Logic
+        const searchInput = document.getElementById('address-search');
+        const suggestionsList = document.getElementById('suggestions');
+        const goButton = document.getElementById('go-button');
+
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            suggestionsList.innerHTML = '';
+            selectedCoords = null;
+            if (!query) return;
+
+            const matches = allAddresses.filter(f => f.properties.Street_Address.toLowerCase().includes(query)).slice(0, 10);
+
+            matches.forEach(f => {
+                const li = document.createElement('li');
+                li.textContent = f.properties.Street_Address;
+                li.onclick = () => {
+                    searchInput.value = f.properties.Street_Address;
+                    selectedCoords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+                    suggestionsList.innerHTML = '';
+                };
+                suggestionsList.appendChild(li);
+            });
+        });
+
+        // 6. Address Marker & Popup Logic
+        goButton.addEventListener('click', function() {
+            if (!selectedCoords) {
+                alert('Please select an address from the list.');
+                return;
+            }
+
+            if (currentMarker) map.removeLayer(currentMarker);
+
+            map.setView(selectedCoords, 17);
+
+            currentMarker = L.circleMarker(selectedCoords, { 
+                radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.8 
+            }).addTo(map);
+
+            const container = document.createElement('div');
+            container.className = 'popup-container';
+            container.innerHTML = `
+                <strong>${searchInput.value}</strong><br>
+                <button class="popup-btn btn-radius" id="pop-radius">Enter Mile Radius</button>
+                <button class="popup-btn" id="pop-cancel">Cancel</button>
+            `;
+
+            currentMarker.bindPopup(container).openPopup();
+
+            // Popup Button Click Handlers
+            container.querySelector('#pop-cancel').onclick = () => map.closePopup();
+            container.querySelector('#pop-radius').onclick = () => {
+                const miles = prompt("Enter radius in miles (e.g. 0.3, 4, 4.2):");
+                if (miles && !isNaN(miles)) {
+                    const radiusKms = parseFloat(miles) * 1.60934;
+                    const circleGeoJSON = turf.circle([selectedCoords[1], selectedCoords[0]], radiusKms, { units: 'kilometers' });
+                    
+                    drawnItems.clearLayers();
+                    L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                    
+                    runBuildingSearch(circleGeoJSON);
+                    map.closePopup();
+                }
+            };
+        });
+
+        // 7. Manual Reset Button (Broom)
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+            div.innerHTML = '<a href="#" title="Clear All" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
                 drawnItems.clearLayers();
+                if (currentMarker) map.removeLayer(currentMarker);
                 document.getElementById('count-display').innerText = "0";
+                searchInput.value = '';
             };
             return div;
         };
         cleaner.addTo(map);
 
-        // =====================
-        // Zoom Out Button
-        // =====================
+        // 8. Zoom Out Button
         const zoomOutControl = L.control({position: 'topright'});
         zoomOutControl.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🔍➖</a>';
+            div.innerHTML = '<a href="#" title="Zoom Out" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🔍➖</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 map.setZoom(map.getZoom() - 1);
@@ -197,73 +277,6 @@
             return div;
         };
         zoomOutControl.addTo(map);
-
-        // =====================
-        // Address Search Feature
-        // =====================
-        let allAddresses = [];
-        const addressFiles = [
-            'Street_Address_Inside_City_LatLon_part1.geojson',
-            'Street_Address_Inside_City_LatLon_part2.geojson'
-        ];
-
-        for (const f of addressFiles) {
-            const data = await fetch(f).then(res => res.json());
-            allAddresses = allAddresses.concat(data.features);
-        }
-
-        const searchInput = document.getElementById('address-search');
-        const suggestionsList = document.getElementById('suggestions');
-        const goButton = document.getElementById('go-button');
-        let currentMarker = null; // currently displayed search marker
-        let selectedCoords = null;
-
-        // Autocomplete
-        searchInput.addEventListener('input', function() {
-            const query = this.value.toLowerCase();
-            suggestionsList.innerHTML = '';
-            selectedCoords = null;
-
-            if (!query) return;
-
-            const matches = allAddresses.filter(f => f.properties.Street_Address.toLowerCase().includes(query)).slice(0, 10);
-
-            for (const f of matches) {
-                const li = document.createElement('li');
-                li.textContent = f.properties.Street_Address;
-                li.dataset.lat = f.geometry.coordinates[1];
-                li.dataset.lng = f.geometry.coordinates[0];
-                li.addEventListener('click', () => {
-                    searchInput.value = f.properties.Street_Address;
-                    selectedCoords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-                    suggestionsList.innerHTML = '';
-                });
-                suggestionsList.appendChild(li);
-            }
-        });
-
-        // Go Button
-        goButton.addEventListener('click', function() {
-            if (!selectedCoords) {
-                alert('Please select an address from the list.');
-                return;
-            }
-
-            // Remove previous marker
-            if (currentMarker) {
-                map.removeLayer(currentMarker);
-            }
-
-            map.setView(selectedCoords, 18);
-            L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 }).addTo(map);
-            
-            // Add new marker with tooltip
-            const addressName = searchInput.value;
-            currentMarker = L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 })
-                .addTo(map)
-                .bindTooltip(addressName, { permanent: true, direction: 'top', offset: [0, -10] })
-                .openTooltip();
-        });
 
     })();
     </script>
