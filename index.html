@@ -234,7 +234,7 @@
             // Popup Button Click Handlers
             container.querySelector('#pop-cancel').onclick = () => map.closePopup();
             container.querySelector('#pop-radius').onclick = () => {
-                const miles = prompt("Enter radius in miles (e.g. 0.3, 4, 4.2):");
+                const miles = prompt("Enter radius in miles (e.g. 0.3, 1):");
                 if (miles && !isNaN(miles)) {
                     const radiusKms = parseFloat(miles) * 1.60934;
                     const circleGeoJSON = turf.circle([selectedCoords[1], selectedCoords[0]], radiusKms, { units: 'kilometers' });
