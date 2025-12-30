@@ -253,7 +253,7 @@
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" title="Clear All" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🧹</a>';
+            div.innerHTML = '<a href="#" title="Clear All" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
             div.onclick = (e) => {
                 e.preventDefault();
                 buildingsLayer.clearLayers();
