@@ -266,18 +266,20 @@
         };
         cleaner.addTo(map);
 
-        // 8. Zoom Out Button
-        const zoomOutControl = L.control({position: 'topright'});
-        zoomOutControl.onAdd = () => {
-            const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-            div.innerHTML = '<a href="#" title="Zoom Out" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🔍➖</a>';
-            div.onclick = (e) => {
-                e.preventDefault();
-                map.setZoom(map.getZoom() - 1);
-            };
-            return div;
-        };
-        zoomOutControl.addTo(map);
+  // 8. Zoom Out Button (Modified to Reset View)
+const zoomOutControl = L.control({position: 'topright'});
+zoomOutControl.onAdd = () => {
+    const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    // Updated title to "Reset Zoom"
+    div.innerHTML = '<a href="#" title="Reset Zoom" style="background:white;width:34px;height:34px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🏠</a>';
+    div.onclick = (e) => {
+        e.preventDefault();
+        // This returns the map to the original coordinates and zoom level (12)
+        map.setView([34.7304, -86.5861], 12); 
+    };
+    return div;
+};
+zoomOutControl.addTo(map);
 
     })();
     </script>
