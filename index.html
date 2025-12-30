@@ -134,41 +134,45 @@
 
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             
-            blockGroupLayer = L.geoJSON(bgData, {
-                style: { color: 'black', weight: 1, fillOpacity: 0 },
-                onEachFeature: (feature, layer) => {
-                    layer.on('mouseover', function(e) {
-                        const selectedCol = document.getElementById('csv-dropdown').value;
-                        if (selectedCol !== 'default') {
-                            const geoid = feature.properties.GEOIDFQ;
-                            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
-                            layer.bindTooltip(`<strong>${selectedCol}:</strong> ${val.toLocaleString()}`).openTooltip();
-                            this.setStyle({ weight: 3, color: '#333' });
-                        }
-                    });
+        blockGroupLayer = L.geoJSON(bgData, {
+    style: { color: 'black', weight: 1, fillOpacity: 0 },
+    onEachFeature: (feature, layer) => {
+        layer.on('mouseover', function(e) {
+            const selectedCol = document.getElementById('csv-dropdown').value;
+            
+            // MODIFY THIS BLOCK:
+            if (selectedCol !== 'default') {
+                const geoid = feature.properties.GEOIDFQ;
+                const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+                layer.bindTooltip(`<strong>${selectedCol}:</strong> ${val.toLocaleString()}`).openTooltip();
+                this.setStyle({ weight: 3, color: '#333' });
+            } else {
+                // Ensure no tooltip is bound or shown in default mode
+                layer.unbindTooltip(); 
+            }
+        });
 
-                    layer.on('mouseout', function(e) {
-                        const selectedCol = document.getElementById('csv-dropdown').value;
-                        if (selectedCol === 'default') {
-                            blockGroupLayer.resetStyle(this);
-                        } else {
-                            // Persistent style recalculation to prevent "erasing"
-                            const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
-                            const maxVal = Math.max(...values);
-                            const geoid = feature.properties.GEOIDFQ;
-                            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
-                            
-                            this.setStyle({
-                                fillColor: getColor(val, maxVal),
-                                fillOpacity: 0.7,
-                                color: 'black',
-                                weight: 1
-                            });
-                        }
-                        layer.closeTooltip();
-                    });
-                }
-            }).addTo(map);
+        layer.on('mouseout', function(e) {
+            const selectedCol = document.getElementById('csv-dropdown').value;
+            if (selectedCol === 'default') {
+                blockGroupLayer.resetStyle(this);
+            } else {
+                const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
+                const maxVal = Math.max(...values);
+                const geoid = feature.properties.GEOIDFQ;
+                const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+                
+                this.setStyle({
+                    fillColor: getColor(val, maxVal),
+                    fillOpacity: 0.7,
+                    color: 'black',
+                    weight: 1
+                });
+            }
+            layer.closeTooltip();
+        });
+    }
+}).addTo(map);
 
             // 4. Load Buildings and Addresses
             const buildingFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
