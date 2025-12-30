@@ -17,6 +17,7 @@
         .count-num { font-size: 2.2em; color: #2d3436; font-weight: bold; display: block; }
         .label { font-size: 0.8em; color: #636e72; text-transform: uppercase; font-weight: bold; }
 
+        /* Search Panel */
         #search-panel {
             position: absolute;
             top: 50%; right: 20px;
@@ -82,6 +83,7 @@
 
     <script>
     (async function() {
+        // Initialize Map
         const map = L.map('map', { renderer: L.canvas(), preferCanvas: true }).setView([34.7304, -86.5861], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -89,6 +91,7 @@
         const drawnItems = new L.FeatureGroup().addTo(map);
         let allBuildings = [];
 
+        // Load Background Data
         try {
             const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
             L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
@@ -96,6 +99,7 @@
             const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
             L.geoJSON(bgData, { style: { color: 'black', weight: 1, fillOpacity: 0, interactive: false } }).addTo(map);
 
+            // Load 4 Residential Buildings files
             const files = [
                 'Buildings_Residential_Zones_part1.geojson',
                 'Buildings_Residential_Zones_part2.geojson',
@@ -107,12 +111,15 @@
                 const data = await fetch(f).then(res => res.json());
                 allBuildings = allBuildings.concat(data.features);
             }
+
         } catch (e) { 
             console.error("Error loading GeoJSON files:", e);
         }
 
+        // Function to search buildings inside drawn shapes
         function runBuildingSearch(filterShape) {
             buildingsLayer.clearLayers();
+
             const searchBbox = turf.bboxPolygon(turf.bbox(filterShape));
             const results = allBuildings.filter(building => {
                 const bBox = turf.bboxPolygon(turf.bbox(building));
@@ -124,15 +131,13 @@
 
             if (results.length > 0) {
                 L.geoJSON(results, {
-                    style: { color: '#00b894', weight: 1, fillOpacity: 0.6 },
+                    style: { color: '#00b894', weight: 1, fillOpacity: 0.6 }, // All green
                     interactive: false
                 }).addTo(buildingsLayer);
             }
         }
 
-        // Custom formatting to force Miles even for small distances
-        L.drawLocal.draw.handlers.circle.radius = 'Radius (miles)';
-        
+        // Drawing Tools
         const drawControl = new L.Control.Draw({
             draw: { 
                 polyline: false, 
@@ -140,29 +145,11 @@
                 circlemarker: false, 
                 polygon: true, 
                 rectangle: true, 
-                circle: {
-                    showRadius: true,
-                    metric: false,
-                    feet: false,
-                    nautic: false,
-                    precision: 2
-                } 
+                circle: true 
             },
             edit: false
         });
         map.addControl(drawControl);
-
-        // Override the tooltip display during drawing to force "miles"
-        map.on('draw:drawstep', function(e) {
-            if (e.tool instanceof L.Draw.Circle) {
-                const radiusMeters = e.tool._shape.getRadius();
-                const radiusMiles = (radiusMeters * 0.000621371).toFixed(2);
-                e.tool._tooltip.updateContent({
-                    text: 'Radius: ' + radiusMiles + ' miles',
-                    subtext: ''
-                });
-            }
-        });
 
         map.on('draw:created', function(e) {
             drawnItems.clearLayers();
@@ -172,14 +159,16 @@
             let geoJSON;
             if (layer instanceof L.Circle) {
                 const center = layer.getLatLng();
-                const radiusMiles = layer.getRadius() * 0.000621371;
-                geoJSON = turf.circle([center.lng, center.lat], radiusMiles, { units: 'miles' });
+                const radiusKms = layer.getRadius() / 1000;
+                geoJSON = turf.circle([center.lng, center.lat], radiusKms, { units: 'kilometers' });
             } else {
                 geoJSON = layer.toGeoJSON();
             }
+
             runBuildingSearch(geoJSON);
         });
 
+        // Manual Reset Button (Broom)
         const cleaner = L.control({position: 'topright'});
         cleaner.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -194,6 +183,9 @@
         };
         cleaner.addTo(map);
 
+        // =====================
+        // Zoom Out Button
+        // =====================
         const zoomOutControl = L.control({position: 'topright'});
         zoomOutControl.onAdd = () => {
             const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -206,6 +198,9 @@
         };
         zoomOutControl.addTo(map);
 
+        // =====================
+        // Address Search Feature
+        // =====================
         let allAddresses = [];
         const addressFiles = [
             'Street_Address_Inside_City_LatLon_part1.geojson',
@@ -220,18 +215,24 @@
         const searchInput = document.getElementById('address-search');
         const suggestionsList = document.getElementById('suggestions');
         const goButton = document.getElementById('go-button');
-        let currentMarker = null;
+        let currentMarker = null; // currently displayed search marker
         let selectedCoords = null;
 
+        // Autocomplete
         searchInput.addEventListener('input', function() {
             const query = this.value.toLowerCase();
             suggestionsList.innerHTML = '';
             selectedCoords = null;
+
             if (!query) return;
+
             const matches = allAddresses.filter(f => f.properties.Street_Address.toLowerCase().includes(query)).slice(0, 10);
+
             for (const f of matches) {
                 const li = document.createElement('li');
                 li.textContent = f.properties.Street_Address;
+                li.dataset.lat = f.geometry.coordinates[1];
+                li.dataset.lng = f.geometry.coordinates[0];
                 li.addEventListener('click', () => {
                     searchInput.value = f.properties.Street_Address;
                     selectedCoords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
@@ -241,21 +242,29 @@
             }
         });
 
+        // Go Button
         goButton.addEventListener('click', function() {
             if (!selectedCoords) {
                 alert('Please select an address from the list.');
                 return;
             }
+
+            // Remove previous marker
             if (currentMarker) {
                 map.removeLayer(currentMarker);
             }
+
             map.setView(selectedCoords, 18);
+            L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 }).addTo(map);
+            
+            // Add new marker with tooltip
             const addressName = searchInput.value;
             currentMarker = L.circleMarker(selectedCoords, { radius: 8, color: 'red', fillOpacity: 0.8 })
                 .addTo(map)
                 .bindTooltip(addressName, { permanent: true, direction: 'top', offset: [0, -10] })
                 .openTooltip();
         });
+
     })();
     </script>
 </body>
