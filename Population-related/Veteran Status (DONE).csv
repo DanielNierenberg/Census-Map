@@ -1,4 +1,4 @@
-GEO_ID,NAME,Veterans Total,Veteran_MOE,Male,Male_MOE,Male (18-34),Male (18-34)_MOE,Male (35-54),Male (35-54)_MOE,Male (55-64),Male (55-64)_MOE,Male (65+),Male (65+)_MOE,Female,Female_MOE,Female (18-34),Female (18-34)_MOE,Female (35-54),Female (35-54)_MOE,Female (55-64),Female (55-64)_MOE,Female (65+),Female (65+)_MOE
+GEO_ID,NAME,Veterans Total,Veterans Total_MOE,Male,Male_MOE,Male (18-34),Male (18-34)_MOE,Male (35-54),Male (35-54)_MOE,Male (55-64),Male (55-64)_MOE,Male (65+),Male (65+)_MOE,Female,Female_MOE,Female (18-34),Female (18-34)_MOE,Female (35-54),Female (35-54)_MOE,Female (55-64),Female (55-64)_MOE,Female (65+),Female (65+)_MOE
 1500000US010890003022,Block Group 2; Census Tract 3.02; Madison County; Alabama,117,69,101,62,0,13,23,29,0,13,78,61.22091146,16,26,0,13,0,13,16,26,0,18.38477631
 1500000US010890009022,Block Group 2; Census Tract 9.02; Madison County; Alabama,43,33,43,33,0,13,0,13,11,26,32,24.69817807,0,13,0,13,0,13,0,13,0,18.38477631
 1500000US010890027222,Block Group 2; Census Tract 27.22; Madison County; Alabama,166,69,155,64,0,13,24,22,70,56,61,41.0487515,11,18,0,13,0,13,0,13,11,22.20360331
@@ -244,4 +244,5 @@ GEO_ID,NAME,Veterans Total,Veteran_MOE,Male,Male_MOE,Male (18-34),Male (18-34)_M
 1500000US010890105045,Block Group 5; Census Tract 105.04; Madison County; Alabama,93,100,63,59,0,13,21,35,42,49,0,18.38477631,30,50,0,13,0,13,30,50,0,18.38477631
 1500000US010890106252,Block Group 2; Census Tract 106.25; Madison County; Alabama,55,55,55,55,0,13,18,40,7,21,30,39.2173431,0,13,0,13,0,13,0,13,0,18.38477631
 1500000US010890114003,Block Group 3; Census Tract 114; Madison County; Alabama,105,54,105,54,9,16,12,18,16,16,68,48.50773134,0,13,0,13,0,13,0,13,0,18.38477631
+
 
