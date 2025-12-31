@@ -122,7 +122,7 @@ const tableMapping = {
     'Ethnicity': { folder: 'Ethnicity', files: {'Race': 'Race (DONE).csv'} },
     'House-related': { folder: 'Housing-related', files: {'Year Housing Built': 'Building Structure Year (DONE).csv', 'Mobile Homes': 'Mobile Homes (DONE).csv', 'Housing Unit Value': 'Owner-Occupied Housing Unit Value (DONE).csv'} },
     'Language': { folder: 'Language', files: {'Limited English': 'Limited English Households (DONE).csv'} },
-    'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Median Age': 'Median Age (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Age': 'Population by Age (DONE).csv', 'Education': 'Population by Age (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veteran Status': 'Veteran Status (DONE).csv'} },
+    'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Age': 'Population by Age (DONE).csv', 'Education': 'Population by Education (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veterans': 'Veteran Status (DONE).csv'} },
     'Transportation-related': { folder: 'Transportation-related', files: {'Means of Transportation': 'Means of Transportation to work (DONE).csv', 'Travel time to work': 'Travel Time to Work (DONE).csv', 'Vehicle availability': 'Vehicle Availability - Households (DONE).csv'} }
 };
 
@@ -189,8 +189,15 @@ const tableMapping = {
 
     function updateViz() {
         if (!currentCSVData.length) return;
+        const tableName = document.getElementById('table-select').value;
         const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
-        const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')).sort();
+        
+        const cols = Object.keys(currentCSVData[0]).filter(c => {
+            let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
+            if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
+            return keep;
+        }).sort();
+        
         const sums = cols.map(c => ({ param: c, val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) }));
 
         document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
@@ -214,7 +221,11 @@ const tableMapping = {
         currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${tableMapping[cat].files[e.target.value]}`);
         const mls = document.getElementById('map-layer-select');
         mls.innerHTML = '<option value="default">Default Map</option>';
-        Object.keys(currentCSVData[0]).forEach(c => { if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; });
+        Object.keys(currentCSVData[0]).forEach(c => { 
+            let show = c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE');
+            if (e.target.value === 'Year Housing Built' && c === 'Total Buildings') show = false;
+            if(show) mls.innerHTML += `<option value="${c}">${c}</option>`; 
+        });
         updateViz();
     });
 
