@@ -7,317 +7,296 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --dark-blue: #002f5d;
-            --light-gray: #f4f7f6;
-            --border-color: #ddd;
-        }
-
-        body, html { 
-            margin: 0; padding: 0; height: 100%; width: 100%; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--light-gray);
-            overflow: hidden;
-        }
-
-        /* 10% Top Banner */
-        #banner {
-            height: 10%; width: 100%;
-            background-color: var(--dark-blue);
-            color: white;
-            display: flex; align-items: center; padding-left: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-
-        /* Dashboard Container */
-        #main-container {
-            display: flex;
-            height: 90%;
-            padding: 15px;
-            box-sizing: border-box;
-            gap: 15px;
-        }
-
-        /* 33% Map Column */
-        #map-container {
-            flex: 0 0 33%;
-            height: 100%;
-            position: relative;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-        }
-        #map { flex: 1; width: 100%; border-radius: 8px; }
-
-        /* Search & Controls inside Map Area */
-        #search-overlay {
-            position: absolute; top: 10px; left: 50px; z-index: 1000;
-            width: 200px; background: white; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        #address-search { width: 100%; border: 1px solid #ccc; padding: 4px; }
-        #suggestions { list-style: none; padding: 0; margin: 0; background: white; max-height: 100px; overflow-y: auto; font-size: 0.8em; }
-        #suggestions li { padding: 4px; cursor: pointer; border-bottom: 1px solid #eee; }
-
-        /* 66% Data Column */
-        #data-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-        }
-
-        /* Filter Row */
-        .filter-row { display: flex; justify-content: space-between; gap: 15px; }
-        .filter-group { flex: 1; }
-        .filter-group label { display: block; font-weight: bold; font-size: 0.75em; margin-bottom: 5px; color: #555; }
-        select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: white; }
-
-        /* KPI Row */
-        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .kpi-card {
-            background: white; padding: 12px 5px; border-radius: 8px;
-            text-align: center; border: 1px solid var(--border-color);
-        }
-        .kpi-card .value { display: block; font-size: 1.1em; font-weight: bold; color: var(--dark-blue); }
-        .kpi-card .label { font-size: 0.65em; color: #777; text-transform: uppercase; font-weight: bold; }
-
-        /* Viz Row */
-        .viz-row { display: flex; gap: 15px; flex: 1; min-height: 0; }
-        .table-container { flex: 1; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow-y: auto; }
-        .chart-container { flex: 1.2; background: white; border-radius: 8px; border: 1px solid var(--border-color); padding: 10px; }
+        :root { --dark-blue: #002f5d; --light-gray: #f4f7f6; --border-color: #ddd; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: var(--light-gray); overflow: hidden; }
         
-        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
-        th { background: #f8f9fa; position: sticky; top: 0; padding: 8px; text-align: left; border-bottom: 2px solid var(--border-color); }
+        /* Layout */
+        #banner { height: 10%; width: 100%; background: var(--dark-blue); color: white; display: flex; align-items: center; padding-left: 20px; box-sizing: border-box; }
+        #main-container { display: flex; height: 90%; padding: 10px; box-sizing: border-box; gap: 15px; }
+        #map-container { flex: 0 0 33%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
+        #map { height: 100%; width: 100%; }
+        #data-container { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; }
+
+        /* Search Panel Overlay on Map */
+        #search-panel { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); width: 220px; }
+        #address-search { width: 100%; padding: 4px; box-sizing: border-box; }
+        #suggestions { list-style: none; padding: 0; margin: 5px 0; max-height: 120px; overflow-y: auto; border: 1px solid #eee; font-size: 0.8em; }
+        #suggestions li { padding: 4px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
+        #suggestions li:hover { background: #f0f0f0; }
+
+        /* Filters & KPIs */
+        .filter-row { display: flex; gap: 10px; }
+        .filter-group { flex: 1; }
+        .filter-group label { display: block; font-size: 0.7em; font-weight: bold; margin-bottom: 3px; color: #555; }
+        select { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); }
+        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .kpi-card { background: white; padding: 10px 5px; border-radius: 6px; text-align: center; border: 1px solid var(--border-color); }
+        .kpi-card .value { display: block; font-size: 1em; font-weight: bold; color: var(--dark-blue); }
+        .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
+
+        /* Visualization Area */
+        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
+        .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
+        .chart-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); padding: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
+        th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
         td { padding: 6px 8px; border-bottom: 1px solid #eee; }
 
-        .footer-note { font-size: 0.75em; color: #888; padding: 5px 0; border-top: 1px solid #ddd; }
+        /* Map UI Helpers */
+        .popup-container { text-align: center; }
+        .popup-btn { display: block; width: 100%; margin-top: 5px; padding: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="banner">
-        <h2>Huntsville ACS 2023 5-year Block Group Data</h2>
-    </div>
+<div id="banner"><h1>Huntsville ACS 2023 5-year Block Group Data</h1></div>
 
-    <div id="main-container">
-        <div id="map-container">
-            <div id="search-overlay">
-                <input type="text" id="address-search" placeholder="Search address...">
-                <ul id="suggestions"></ul>
-            </div>
-            <div id="map"></div>
-            <div style="padding: 5px; font-size: 0.8em; background: #fff;">
-                Residential Buildings in Selection: <span id="count-display" style="font-weight:bold; color: var(--dark-blue);">0</span>
-            </div>
+<div id="main-container">
+    <div id="map-container">
+        <div id="search-panel">
+            <input type="text" id="address-search" placeholder="Type an address..." autocomplete="off">
+            <ul id="suggestions"></ul>
+            <button id="go-button" style="width:100%; cursor:pointer;">Go</button>
         </div>
-
-        <div id="data-container">
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label>CATEGORY SELECTION</label>
-                    <select id="category-select">
-                        <option value="">-- Select Category --</option>
-                        <option value="Computer/Internet Access">Computer/Internet Access</option>
-                        <option value="Employment">Employment</option>
-                        <option value="Ethnicity">Ethnicity</option>
-                        <option value="House-related">House-related</option>
-                        <option value="Language">Language</option>
-                        <option value="Population-related">Population-related</option>
-                        <option value="Transportation-related">Transportation-related</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label>CENSUS TABLE SELECTION</label>
-                    <select id="table-select"><option value="">Select Category First</option></select>
-                </div>
-                <div class="filter-group">
-                    <label>MAP LAYER VIEW (CHOROPLETH)</label>
-                    <select id="map-layer-select"><option value="default">Default Map</option></select>
-                </div>
-            </div>
-
-            <div class="kpi-row">
-                <div class="kpi-card"><span class="label">Total Population</span><span id="kpi-pop" class="value">-</span></div>
-                <div class="kpi-card"><span class="label">Total Households</span><span id="kpi-hh" class="value">-</span></div>
-                <div class="kpi-card"><span class="label">Median Income</span><span id="kpi-income" class="value">-</span></div>
-                <div class="kpi-card"><span class="label">Median House Value</span><span id="kpi-house-val" class="value">-</span></div>
-                <div class="kpi-card"><span class="label">Median Age</span><span id="kpi-age" class="value">-</span></div>
-            </div>
-
-            <div class="viz-row">
-                <div class="table-container">
-                    <table id="data-table">
-                        <thead><tr><th>Census Parameter</th><th>Count (Sum)</th></tr></thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="chart-container">
-                    <canvas id="barChart"></canvas>
-                </div>
-            </div>
-
-            <div class="footer-note">
-                Data was collected from the 2023 5-year American Community Survey. All values are block-group aggregates.
-            </div>
+        <div id="map"></div>
+        <div style="position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:5px; border-radius:4px; font-size:0.7em; border:1px solid #ccc;">
+            Residential Buildings: <span id="count-display" style="font-weight:bold">0</span>
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <div id="data-container">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label>CATEGORY SELECTION</label>
+                <select id="category-select">
+                    <option value="">-- Select --</option>
+                    <option value="Computer/Internet Access">Computer/Internet Access</option>
+                    <option value="Employment">Employment</option>
+                    <option value="Ethnicity">Ethnicity</option>
+                    <option value="House-related">House-related</option>
+                    <option value="Language">Language</option>
+                    <option value="Population-related">Population-related</option>
+                    <option value="Transportation-related">Transportation-related</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>CENSUS TABLE SELECTION</label>
+                <select id="table-select"><option value="">Select Category First</option></select>
+            </div>
+            <div class="filter-group">
+                <label>MAP LAYER VIEW</label>
+                <select id="map-layer-select"><option value="default">Default Map</option></select>
+            </div>
+        </div>
 
-    <script>
-    const tableMapping = {
-        'Computer/Internet Access': { folder: 'Computer and Internet Access', files: {'Computer/Internet Access': 'Computer and Internet Access by Household (DONE).csv'} },
-        'Employment': { folder: 'Employment', files: {'Employment Status': 'Employment Status (DONE).csv', 'Household Income': 'Household Income (DONE).csv'} },
-        'Ethnicity': { folder: 'Ethnicity', files: {'Race': 'Race (DONE).csv'} },
-        'House-related': { folder: 'Housing-related', files: {'Year Housing Built': 'Building Structure Year (DONE).csv', 'Mobile Homes': 'Mobile Homes (DONE).csv', 'Housing Unit Value': 'Owner-Occupied Housing Unit Value (DONE).csv'} },
-        'Language': { folder: 'Language', files: {'Limited English': 'Limited English Households (DONE).csv'} },
-        'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Median Age': 'Median Age (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Age': 'Population by Age (DONE).csv', 'Education': 'Population by Age (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veteran Status': 'Veteran Status (DONE).csv'} },
-        'Transportation-related': { folder: 'Transportation-related', files: {'Means of Transportation': 'Means of Transportation to work (DONE).csv', 'Travel time to work': 'Travel Time to Work (DONE).csv', 'Vehicle availability': 'Vehicle Availability - Households (DONE).csv'} }
-    };
+        <div class="kpi-row">
+            <div class="kpi-card"><span class="label">Total Population</span><span id="kpi-pop" class="value">0</span></div>
+            <div class="kpi-card"><span class="label">Total Households</span><span id="kpi-hh" class="value">0</span></div>
+            <div class="kpi-card"><span class="label">Median Income</span><span id="kpi-income" class="value">$0</span></div>
+            <div class="kpi-card"><span class="label">Median House Value</span><span id="kpi-house-val" class="value">$0</span></div>
+            <div class="kpi-card"><span class="label">Median Age</span><span id="kpi-age" class="value">0</span></div>
+        </div>
 
-    (async function() {
-        // 1. Setup Map
-        const map = L.map('map').setView([34.7304, -86.5861], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        const drawnItems = new L.FeatureGroup().addTo(map);
-        const buildingsLayer = L.layerGroup().addTo(map);
-        let bgLayer, currentCSVData = [], activeBlockGroup = null, chartInstance = null, allBuildings = [];
+        <div class="viz-row">
+            <div class="table-container">
+                <table id="data-table">
+                    <thead><tr><th>Census Parameter</th><th>Count</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="chart-container"><canvas id="barChart"></canvas></div>
+        </div>
+        <div style="font-size: 0.7em; color: #777;">Data was collected from the 2023 5-year American Community Survey.</div>
+    </div>
+</div>
 
-        // 2. Data Loading Helper
-        async function loadCSV(path) {
-            try {
-                const resp = await fetch(path);
-                const text = await resp.text();
-                return Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
-            } catch(e) { console.error("CSV Load Error:", path); return []; }
-        }
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
-        // 3. KPI Logic
-        let kpiRaw = {};
-        async function initKPIs() {
-            kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
-            kpiRaw.income = await loadCSV('Employment/Median Household Income (DONE).csv');
-            kpiRaw.house = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
-            kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
-            renderKPIs();
-        }
+<script>
+const tableMapping = {
+    'Computer/Internet Access': { folder: 'Computer and Internet Access', files: {'Computer/Internet Access': 'Computer and Internet Access by Household (DONE).csv'} },
+    'Employment': { folder: 'Employment', files: {'Employment Status': 'Employment Status (DONE).csv', 'Household Income': 'Household Income (DONE).csv'} },
+    'Ethnicity': { folder: 'Ethnicity', files: {'Race': 'Race (DONE).csv'} },
+    'House-related': { folder: 'Housing-related', files: {'Year Housing Built': 'Building Structure Year (DONE).csv', 'Mobile Homes': 'Mobile Homes (DONE).csv', 'Housing Unit Value': 'Owner-Occupied Housing Unit Value (DONE).csv'} },
+    'Language': { folder: 'Language', files: {'Limited English': 'Limited English Households (DONE).csv'} },
+    'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Median Age': 'Median Age (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Age': 'Population by Age (DONE).csv', 'Education': 'Population by Age (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veteran Status': 'Veteran Status (DONE).csv'} },
+    'Transportation-related': { folder: 'Transportation-related', files: {'Means of Transportation': 'Means of Transportation to work (DONE).csv', 'Travel time to work': 'Travel Time to Work (DONE).csv', 'Vehicle availability': 'Vehicle Availability - Households (DONE).csv'} }
+};
 
-        function renderKPIs(geoid = null) {
-            const filterRow = (data) => geoid ? data.filter(r => r.GEO_ID === geoid) : data;
-            
-            const popSum = filterRow(kpiRaw.pop).reduce((a, b) => a + (b.Total || 0), 0);
-            const incMed = filterRow(kpiRaw.income)[0]?.['Median household income (past 12 months)'] || 0;
-            const houseMed = filterRow(kpiRaw.house)[0]?.['Median value ($)'] || 0;
-            const ageMed = filterRow(kpiRaw.age)[0]?.['Median Age'] || 0;
+(async function() {
+    // 1. Map Init
+    const map = L.map('map', { renderer: L.canvas() }).setView([34.7304, -86.5861], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-            document.getElementById('kpi-pop').innerText = popSum.toLocaleString();
-            document.getElementById('kpi-hh').innerText = popSum.toLocaleString();
-            document.getElementById('kpi-income').innerText = incMed > 0 ? `$${incMed.toLocaleString()}` : "N/A";
-            document.getElementById('kpi-house-val').innerText = houseMed > 0 ? `$${houseMed.toLocaleString()}` : "N/A";
-            document.getElementById('kpi-age').innerText = ageMed || "N/A";
-        }
+    const buildingsLayer = L.layerGroup().addTo(map);
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [], activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
 
-        // 4. Visualization (Table + Chart)
-        function updateViz() {
-            const geoid = activeBlockGroup;
-            const filtered = geoid ? currentCSVData.filter(r => r.GEO_ID === geoid) : currentCSVData;
-            if(!currentCSVData.length) return;
+    // 2. Data Fetching
+    async function loadCSV(path) {
+        const r = await fetch(path);
+        const t = await r.text();
+        return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+    }
 
-            const cols = Object.keys(currentCSVData[0]).filter(c => 
-                c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')
-            ).sort();
-
-            const sums = cols.map(c => ({
-                param: c,
-                val: filtered.reduce((sum, row) => sum + (Number(row[c]) || 0), 0)
-            }));
-
-            // Table
-            const tbody = document.querySelector('#data-table tbody');
-            tbody.innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
-
-            // Chart
-            if (chartInstance) chartInstance.destroy();
-            chartInstance = new Chart(document.getElementById('barChart'), {
-                type: 'bar',
-                data: {
-                    labels: sums.map(s => s.param),
-                    datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }]
-                },
-                options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
-        }
-
-        // 5. Interaction Controllers
-        document.getElementById('category-select').addEventListener('change', (e) => {
-            const mapping = tableMapping[e.target.value];
-            const ts = document.getElementById('table-select');
-            ts.innerHTML = '<option value="">-- Select Table --</option>';
-            if(mapping) Object.keys(mapping.files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
-        });
-
-        document.getElementById('table-select').addEventListener('change', async (e) => {
-            const cat = document.getElementById('category-select').value;
-            const tableKey = e.target.value;
-            if(!tableKey) return;
-
-            const file = tableMapping[cat].files[tableKey];
-            currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${file}`);
-            
-            const mls = document.getElementById('map-layer-select');
-            mls.innerHTML = '<option value="default">Default Map</option>';
-            Object.keys(currentCSVData[0] || {}).forEach(c => {
-                if(c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`;
-            });
-            updateViz();
-        });
-
-        // 6. Map Layers & Selection
-        const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
+    // Load Geometry & Addresses
+    try {
+        const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
         bgLayer = L.geoJSON(bgData, {
-            style: { color: '#333', weight: 1, fillOpacity: 0.1 },
-            onEachFeature: (f, l) => {
-                l.on('click', () => {
-                    const id = f.properties.GEOIDFQ;
-                    if(activeBlockGroup === id) {
-                        activeBlockGroup = null;
-                        bgLayer.resetStyle();
-                    } else {
-                        activeBlockGroup = id;
-                        bgLayer.setStyle({ fillOpacity: 0.05, color: '#999' });
-                        l.setStyle({ color: 'orange', weight: 3, fillOpacity: 0.2 });
-                    }
-                    renderKPIs(activeBlockGroup);
-                    updateViz();
+            style: { color: 'black', weight: 1, fillOpacity: 0.1 },
+            onEachFeature: (feature, layer) => {
+                layer.on('click', () => {
+                    const id = feature.properties.GEOIDFQ;
+                    if (activeBlockGroup === id) { activeBlockGroup = null; bgLayer.resetStyle(); }
+                    else { activeBlockGroup = id; bgLayer.setStyle({fillOpacity:0.05}); layer.setStyle({fillColor:'orange', fillOpacity:0.3}); }
+                    updateKPIs(); updateViz();
                 });
             }
         }).addTo(map);
 
-        document.getElementById('map-layer-select').addEventListener('change', (e) => {
-            const col = e.target.value;
-            if(col === 'default') return bgLayer.resetStyle();
-            
-            const vals = currentCSVData.map(r => r[col] || 0);
-            const max = Math.max(...vals);
-            bgLayer.setStyle(f => {
-                const row = currentCSVData.find(r => r.GEO_ID === f.properties.GEOIDFQ);
-                const val = row ? row[col] : 0;
-                return {
-                    fillColor: '#3f007d',
-                    fillOpacity: val > 0 ? (val / max) * 0.8 : 0
-                };
-            });
-        });
+        const bFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
+        for (const f of bFiles) { const d = await fetch(f).then(r => r.json()); allBuildings = allBuildings.concat(d.features); }
 
-        initKPIs();
-    })();
-    </script>
+        const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
+        for (const f of aFiles) { const d = await fetch(f).then(r => r.json()); allAddresses = allAddresses.concat(d.features); }
+    } catch(e) { console.error("Load Error", e); }
+
+    // 3. KPI & Viz Updates
+    let kpiRaw = {};
+    async function initKPIs() {
+        kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
+        kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
+        kpiRaw.hou = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
+        kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
+        updateKPIs();
+    }
+
+    function updateKPIs() {
+        const filter = (data) => activeBlockGroup ? data.filter(r => r.GEO_ID === activeBlockGroup) : data;
+        const p = filter(kpiRaw.pop).reduce((a, b) => a + (b.Total || 0), 0);
+        const i = filter(kpiRaw.inc)[0]?.['Median household income (past 12 months)'] || 0;
+        const h = filter(kpiRaw.hou)[0]?.['Median value ($)'] || 0;
+        const a = filter(kpiRaw.age)[0]?.['Median Age'] || 0;
+        document.getElementById('kpi-pop').innerText = p.toLocaleString();
+        document.getElementById('kpi-hh').innerText = p.toLocaleString();
+        document.getElementById('kpi-income').innerText = i > 0 ? '$' + i.toLocaleString() : 'N/A';
+        document.getElementById('kpi-house-val').innerText = h > 0 ? '$' + h.toLocaleString() : 'N/A';
+        document.getElementById('kpi-age').innerText = a || 'N/A';
+    }
+
+    function updateViz() {
+        if (!currentCSVData.length) return;
+        const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
+        const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')).sort();
+        const sums = cols.map(c => ({ param: c, val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) }));
+
+        document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(document.getElementById('barChart'), {
+            type: 'bar', data: { labels: sums.map(s => s.param), datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }] },
+            options: { indexAxis: 'y', maintainAspectRatio: false }
+        });
+    }
+
+    // 4. Dropdowns
+    document.getElementById('category-select').addEventListener('change', (e) => {
+        const ts = document.getElementById('table-select');
+        ts.innerHTML = '<option value="">-- Select --</option>';
+        if (tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
+    });
+
+    document.getElementById('table-select').addEventListener('change', async (e) => {
+        const cat = document.getElementById('category-select').value;
+        if (!e.target.value) return;
+        currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${tableMapping[cat].files[e.target.value]}`);
+        const mls = document.getElementById('map-layer-select');
+        mls.innerHTML = '<option value="default">Default Map</option>';
+        Object.keys(currentCSVData[0]).forEach(c => { if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; });
+        updateViz();
+    });
+
+    document.getElementById('map-layer-select').addEventListener('change', (e) => {
+        const col = e.target.value;
+        if (col === 'default') return bgLayer.resetStyle();
+        const max = Math.max(...currentCSVData.map(r => r[col] || 0));
+        bgLayer.setStyle(f => {
+            const val = currentCSVData.find(r => r.GEO_ID === f.properties.GEOIDFQ)?.[col] || 0;
+            return { fillColor: '#3f007d', fillOpacity: val > 0 ? (val / max) * 0.8 : 0 };
+        });
+    });
+
+    // 5. Building Search & Address
+    function runBuildingSearch(shape) {
+        buildingsLayer.clearLayers();
+        const results = allBuildings.filter(b => turf.booleanIntersects(b, shape));
+        document.getElementById('count-display').innerText = results.length.toLocaleString();
+        L.geoJSON(results, { style: { color: '#00b894', weight: 1, fillOpacity: 0.6 } }).addTo(buildingsLayer);
+    }
+
+    const drawControl = new L.Control.Draw({ draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true }, edit: false });
+    map.addControl(drawControl);
+    map.on('draw:created', e => {
+        drawnItems.clearLayers(); drawnItems.addLayer(e.layer);
+        const geoJSON = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius() / 1000, { units: 'kilometers' }) : e.layer.toGeoJSON();
+        runBuildingSearch(geoJSON);
+    });
+
+    const searchInput = document.getElementById('address-search');
+    searchInput.addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        const suggs = document.getElementById('suggestions');
+        suggs.innerHTML = '';
+        if (!q) return;
+        allAddresses.filter(f => f.properties.Street_Address.toLowerCase().includes(q)).slice(0, 10).forEach(f => {
+            const li = document.createElement('li');
+            li.textContent = f.properties.Street_Address;
+            li.onclick = () => { searchInput.value = f.properties.Street_Address; selectedCoords = [f.geometry.coordinates[1], f.geometry.coordinates[0]]; suggs.innerHTML = ''; };
+            suggs.appendChild(li);
+        });
+    });
+
+    document.getElementById('go-button').onclick = () => {
+        if (!selectedCoords) return;
+        if (currentMarker) map.removeLayer(currentMarker);
+        map.setView(selectedCoords, 17);
+        currentMarker = L.circleMarker(selectedCoords, { radius: 10, color: 'red' }).addTo(map);
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+        container.innerHTML = `<strong>Search</strong><button class="popup-btn" id="pop-radius">Mile Radius</button>`;
+        currentMarker.bindPopup(container).openPopup();
+        container.querySelector('#pop-radius').onclick = () => {
+            const m = prompt("Miles:");
+            if (m) {
+                const circle = turf.circle([selectedCoords[1], selectedCoords[0]], parseFloat(m) * 1.609, { units: 'kilometers' });
+                drawnItems.clearLayers(); L.geoJSON(circle).addTo(drawnItems); runBuildingSearch(circle);
+            }
+        };
+    };
+
+    // Extra Buttons
+    const clearBtn = L.control({position: 'topright'});
+    clearBtn.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Clear" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
+        div.onclick = (e) => { e.preventDefault(); buildingsLayer.clearLayers(); drawnItems.clearLayers(); if(currentMarker) map.removeLayer(currentMarker); };
+        return div;
+    };
+    clearBtn.addTo(map);
+
+    const homeBtn = L.control({position: 'topright'});
+    homeBtn.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Home" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🏠</a>';
+        div.onclick = (e) => { e.preventDefault(); map.setView([34.7304, -86.5861], 12); };
+        return div;
+    };
+    homeBtn.addTo(map);
+
+    initKPIs();
+})();
+</script>
 </body>
 </html>
