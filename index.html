@@ -187,26 +187,41 @@ const tableMapping = {
         document.getElementById('kpi-age').innerText = a || 'N/A';
     }
 
-    function updateViz() {
-        if (!currentCSVData.length) return;
-        const tableName = document.getElementById('table-select').value;
-        const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
-        
-        const cols = Object.keys(currentCSVData[0]).filter(c => {
-            let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
-            if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
-            return keep;
-        }).sort();
-        
-        const sums = cols.map(c => ({ param: c, val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) }));
+ function updateViz() {
+    if (!currentCSVData.length) return;
+    const tableName = document.getElementById('table-select').value;
+    const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
+    
+    // Get columns and filter out IDs and the "Total Buildings" if necessary
+    const cols = Object.keys(currentCSVData[0]).filter(c => {
+        let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
+        if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
+        return keep;
+    });
+    
+    // 1. Calculate the sums for each parameter
+    const sums = cols.map(c => ({ 
+        param: c, 
+        val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) 
+    }));
 
-        document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(document.getElementById('barChart'), {
-            type: 'bar', data: { labels: sums.map(s => s.param), datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }] },
-            options: { indexAxis: 'y', maintainAspectRatio: false }
-        });
-    }
+    // 2. Sort the array from highest value to lowest
+    sums.sort((a, b) => b.val - a.val);
+
+    // 3. Update Table
+    document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
+    
+    // 4. Update Chart
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar', 
+        data: { 
+            labels: sums.map(s => s.param), 
+            datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }] 
+        },
+        options: { indexAxis: 'y', maintainAspectRatio: false }
+    });
+}
 
     // 4. Dropdowns
     document.getElementById('category-select').addEventListener('change', (e) => {
