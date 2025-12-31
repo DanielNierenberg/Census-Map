@@ -34,6 +34,14 @@
         .kpi-card .value { display: block; font-size: 1em; font-weight: bold; color: var(--dark-blue); }
         .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
 
+        .chart-container { 
+    flex: 1; 
+    background: white; 
+    border-radius: 6px; 
+    border: 1px solid var(--border-color); 
+    padding: 10px; 
+    overflow-y: auto; /* This enables the vertical scrollbar */
+}
         /* Visualization Area */
         .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
         .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
@@ -211,17 +219,34 @@ const tableMapping = {
     // 3. Update Table
     document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
     
-    // 4. Update Chart
+   // 4. Update Chart
     if (chartInstance) chartInstance.destroy();
-    chartInstance = new Chart(document.getElementById('barChart'), {
+
+    const chartCanvas = document.getElementById('barChart');
+    
+    // Set dynamic height: number of bars * 40px ensures enough 
+    // vertical room so your "perfect" font size doesn't overlap.
+    chartCanvas.style.height = (sums.length * 40) + 'px';
+
+    chartInstance = new Chart(chartCanvas, {
         type: 'bar', 
         data: { 
             labels: sums.map(s => s.param), 
             datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }] 
         },
-        options: { indexAxis: 'y', maintainAspectRatio: false }
+        options: { 
+            indexAxis: 'y', 
+            maintainAspectRatio: false, 
+            responsive: true,
+            scales: {
+                y: {
+                    ticks: {
+                        autoSkip: false // This prevents the skipping you were seeing
+                    }
+                }
+            }
+        }
     });
-}
 
     // 4. Dropdowns
     document.getElementById('category-select').addEventListener('change', (e) => {
