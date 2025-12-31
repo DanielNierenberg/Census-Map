@@ -1,4 +1,4 @@
-﻿GEO_ID,NAME,No Vehicles (Total),No Vehicles (Total)_MOE,No Vehicle Available (Owner occupied),No Vehicle Available (Owner occupied)_MOE,No Vehicle Available (Renter occupied),No Vehicle Available (Renter occupied)_MOE
+﻿GEO_ID,NAME,No Vehicle Available (Total),No Vehicle Available (Total)_MOE,No Vehicle Available (Owner occupied),No Vehicle Available (Owner occupied)_MOE,No Vehicle Available (Renter occupied),No Vehicle Available (Renter occupied)_MOE
 1500000US010890002031,Block Group 1; Census Tract 2.03; Madison County; Alabama,46,48.76474136,0,13,46,47
 1500000US010890002032,Block Group 2; Census Tract 2.03; Madison County; Alabama,122,118.7139419,0,13,122,118
 1500000US010890002033,Block Group 3; Census Tract 2.03; Madison County; Alabama,24,31.04834939,4,8,20,30
@@ -244,3 +244,4 @@
 1500000US010890114002,Block Group 2; Census Tract 114; Madison County; Alabama,12,25.55386468,12,22,0,13
 1500000US010890114003,Block Group 3; Census Tract 114; Madison County; Alabama,35,39.45883931,31,39,4,6
 1500000US010890114004,Block Group 4; Census Tract 114; Madison County; Alabama,19,30.87069808,0,13,19,28
+
