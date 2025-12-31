@@ -137,20 +137,26 @@
         blockGroupLayer = L.geoJSON(bgData, {
     style: { color: 'black', weight: 1, fillOpacity: 0 },
     onEachFeature: (feature, layer) => {
-        layer.on('mouseover', function(e) {
-            const selectedCol = document.getElementById('csv-dropdown').value;
-            
-            // MODIFY THIS BLOCK:
-            if (selectedCol !== 'default') {
-                const geoid = feature.properties.GEOIDFQ;
-                const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
-                layer.bindTooltip(`<strong>${selectedCol}:</strong> ${val.toLocaleString()}`).openTooltip();
-                this.setStyle({ weight: 3, color: '#333' });
-            } else {
-                // Ensure no tooltip is bound or shown in default mode
-                layer.unbindTooltip(); 
-            }
-        });
+       layer.on('mouseover', function(e) {
+    const dropdown = document.getElementById('csv-dropdown');
+    const selectedCol = dropdown.value;
+    
+    if (selectedCol !== 'default') {
+        const geoid = feature.properties.GEOIDFQ;
+        const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+        const rank = dropdown.ranks && dropdown.ranks[geoid] ? dropdown.ranks[geoid] : 'N/A';
+        
+        // Added the Rank line here:
+        layer.bindTooltip(`
+            <strong>${selectedCol}:</strong> ${val.toLocaleString()}<br>
+            <strong>Rank:</strong> ${rank}
+        `).openTooltip();
+        
+        this.setStyle({ weight: 3, color: '#333' });
+    } else {
+        layer.unbindTooltip(); 
+    }
+});
 
         layer.on('mouseout', function(e) {
             const selectedCol = document.getElementById('csv-dropdown').value;
@@ -213,29 +219,39 @@
             map.legend = legend;
         }
 
-        // 6. Combined Dropdown Change Logic
-        document.getElementById('csv-dropdown').addEventListener('change', function(e) {
-            const selectedCol = e.target.value;
-            
-            if (selectedCol === 'default') {
-                blockGroupLayer.setStyle({ fillOpacity: 0, color: 'black', weight: 1 });
-            } else {
-                const values = Object.values(csvDataMap).map(r => r[selectedCol] || 0);
-                const maxVal = Math.max(...values);
+      // 6. Combined Dropdown Change Logic
+document.getElementById('csv-dropdown').addEventListener('change', function(e) {
+    const selectedCol = e.target.value;
+    
+    if (selectedCol === 'default') {
+        blockGroupLayer.setStyle({ fillOpacity: 0, color: 'black', weight: 1 });
+        this.ranks = {}; // Clear ranks
+    } else {
+        const rows = Object.values(csvDataMap).filter(r => r[selectedCol] !== undefined);
+        const values = rows.map(r => r[selectedCol]);
+        const maxVal = Math.max(...values);
 
-                blockGroupLayer.setStyle(feature => {
-                    const geoid = feature.properties.GEOIDFQ;
-                    const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
-                    return {
-                        fillColor: getColor(val, maxVal),
-                        fillOpacity: 0.7,
-                        color: 'black',
-                        weight: 1
-                    };
-                });
-            }
-            updateLegend(selectedCol);
+        // Calculate Ranks: Sort unique values descending
+        const sortedUnique = [...new Set(values)].sort((a, b) => b - a);
+        this.ranks = {};
+        rows.forEach(row => {
+            // Rank is index + 1
+            this.ranks[row.Geography] = sortedUnique.indexOf(row[selectedCol]) + 1;
         });
+
+        blockGroupLayer.setStyle(feature => {
+            const geoid = feature.properties.GEOIDFQ;
+            const val = csvDataMap[geoid] ? csvDataMap[geoid][selectedCol] : 0;
+            return {
+                fillColor: getColor(val, maxVal),
+                fillOpacity: 0.7,
+                color: 'black',
+                weight: 1
+            };
+        });
+    }
+    updateLegend(selectedCol);
+});
 
         // 7. Search & Drawing Tools
         function runBuildingSearch(filterShape) {
