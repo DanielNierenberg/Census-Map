@@ -34,18 +34,22 @@
         .kpi-card .value { display: block; font-size: 1em; font-weight: bold; color: var(--dark-blue); }
         .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
 
-        .chart-container { 
-    flex: 1; 
-    background: white; 
-    border-radius: 6px; 
-    border: 1px solid var(--border-color); 
-    padding: 10px; 
-    overflow-y: auto; /* This enables the vertical scrollbar */
-}
         /* Visualization Area */
-        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
+        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; overflow: hidden; }
         .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
-        .chart-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); padding: 10px; }
+        
+        /* Updated Chart Container with Scrollbar */
+        .chart-container { 
+            flex: 1; 
+            background: white; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-color); 
+            padding: 10px; 
+            overflow-y: auto; 
+            box-sizing: border-box;
+            position: relative;
+        }
+
         table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
         th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
         td { padding: 6px 8px; border-bottom: 1px solid #eee; }
@@ -112,7 +116,9 @@
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="chart-container"><canvas id="barChart"></canvas></div>
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
+            </div>
         </div>
         <div style="font-size: 0.7em; color: #777;">Data was collected from the 2023 5-year American Community Survey.</div>
     </div>
@@ -195,38 +201,34 @@ const tableMapping = {
         document.getElementById('kpi-age').innerText = a || 'N/A';
     }
 
- function updateViz() {
+function updateViz() {
     if (!currentCSVData.length) return;
     const tableName = document.getElementById('table-select').value;
     const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
     
-    // Get columns and filter out IDs and the "Total Buildings" if necessary
     const cols = Object.keys(currentCSVData[0]).filter(c => {
         let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
         if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
         return keep;
     });
     
-    // 1. Calculate the sums for each parameter
     const sums = cols.map(c => ({ 
         param: c, 
         val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) 
     }));
 
-    // 2. Sort the array from highest value to lowest
     sums.sort((a, b) => b.val - a.val);
 
-    // 3. Update Table
     document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
     
-   // 4. Update Chart
+    // --- UPDATED CHART LOGIC ---
     if (chartInstance) chartInstance.destroy();
-
+    
     const chartCanvas = document.getElementById('barChart');
     
-    // Set dynamic height: number of bars * 40px ensures enough 
-    // vertical room so your "perfect" font size doesn't overlap.
-    chartCanvas.style.height = (sums.length * 40) + 'px';
+    // Ensure every bar has at least 40px of vertical space so labels don't hide
+    const dynamicHeight = Math.max(300, sums.length * 40); 
+    chartCanvas.style.height = dynamicHeight + 'px';
 
     chartInstance = new Chart(chartCanvas, {
         type: 'bar', 
@@ -241,12 +243,13 @@ const tableMapping = {
             scales: {
                 y: {
                     ticks: {
-                        autoSkip: false // This prevents the skipping you were seeing
+                        autoSkip: false // Force all labels to show
                     }
                 }
             }
         }
     });
+}
 
     // 4. Dropdowns
     document.getElementById('category-select').addEventListener('change', (e) => {
