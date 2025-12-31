@@ -33,7 +33,7 @@
         #main-container {
             display: flex;
             height: 90%;
-            padding: 10px;
+            padding: 15px;
             box-sizing: border-box;
             gap: 15px;
         }
@@ -45,10 +45,20 @@
             position: relative;
             background: white;
             border-radius: 8px;
-            overflow: hidden;
             border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
         }
-        #map { height: 100%; width: 100%; }
+        #map { flex: 1; width: 100%; border-radius: 8px; }
+
+        /* Search & Controls inside Map Area */
+        #search-overlay {
+            position: absolute; top: 10px; left: 50px; z-index: 1000;
+            width: 200px; background: white; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #address-search { width: 100%; border: 1px solid #ccc; padding: 4px; }
+        #suggestions { list-style: none; padding: 0; margin: 0; background: white; max-height: 100px; overflow-y: auto; font-size: 0.8em; }
+        #suggestions li { padding: 4px; cursor: pointer; border-bottom: 1px solid #eee; }
 
         /* 66% Data Column */
         #data-container {
@@ -57,78 +67,59 @@
             flex-direction: column;
             gap: 15px;
             overflow-y: auto;
-            padding-right: 5px;
         }
 
         /* Filter Row */
-        .filter-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-        }
+        .filter-row { display: flex; justify-content: space-between; gap: 15px; }
         .filter-group { flex: 1; }
-        .filter-group label { display: block; font-weight: bold; font-size: 0.8em; margin-bottom: 5px; color: #555; }
-        select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); }
+        .filter-group label { display: block; font-weight: bold; font-size: 0.75em; margin-bottom: 5px; color: #555; }
+        select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: white; }
 
         /* KPI Row */
-        .kpi-row {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-        }
+        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
         .kpi-card {
-            background: white; padding: 10px; border-radius: 8px;
+            background: white; padding: 12px 5px; border-radius: 8px;
             text-align: center; border: 1px solid var(--border-color);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .kpi-card .value { display: block; font-size: 1.2em; font-weight: bold; color: var(--dark-blue); }
-        .kpi-card .label { font-size: 0.7em; color: #777; text-transform: uppercase; }
+        .kpi-card .value { display: block; font-size: 1.1em; font-weight: bold; color: var(--dark-blue); }
+        .kpi-card .label { font-size: 0.65em; color: #777; text-transform: uppercase; font-weight: bold; }
 
-        /* Visualization Row */
-        .viz-row {
-            display: flex;
-            gap: 15px;
-            flex: 1;
-            min-height: 350px;
-        }
+        /* Viz Row */
+        .viz-row { display: flex; gap: 15px; flex: 1; min-height: 0; }
         .table-container { flex: 1; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow-y: auto; }
-        .chart-container { flex: 1; background: white; border-radius: 8px; border: 1px solid var(--border-color); padding: 10px; }
+        .chart-container { flex: 1.2; background: white; border-radius: 8px; border: 1px solid var(--border-color); padding: 10px; }
         
-        table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-        th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; text-align: left; border-bottom: 2px solid var(--border-color); }
-        td { padding: 8px; border-bottom: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+        th { background: #f8f9fa; position: sticky; top: 0; padding: 8px; text-align: left; border-bottom: 2px solid var(--border-color); }
+        td { padding: 6px 8px; border-bottom: 1px solid #eee; }
 
-        .footer-note { font-size: 0.8em; color: #777; font-style: italic; margin-top: auto; }
-
-        /* Map UI Overlays */
-        #status-panel {
-            position: absolute; bottom: 10px; left: 10px; z-index: 1000;
-            background: white; padding: 8px; border-radius: 5px; border: 1px solid var(--border-color);
-            font-size: 0.8em;
-        }
+        .footer-note { font-size: 0.75em; color: #888; padding: 5px 0; border-top: 1px solid #ddd; }
     </style>
 </head>
 <body>
 
     <div id="banner">
-        <h1>Huntsville ACS 2023 5-year Block Group Data</h1>
+        <h2>Huntsville ACS 2023 5-year Block Group Data</h2>
     </div>
 
     <div id="main-container">
         <div id="map-container">
+            <div id="search-overlay">
+                <input type="text" id="address-search" placeholder="Search address...">
+                <ul id="suggestions"></ul>
+            </div>
             <div id="map"></div>
-            <div id="status-panel">
-                Res. Buildings: <span id="count-display" style="font-weight:bold">0</span>
+            <div style="padding: 5px; font-size: 0.8em; background: #fff;">
+                Residential Buildings in Selection: <span id="count-display" style="font-weight:bold; color: var(--dark-blue);">0</span>
             </div>
         </div>
 
         <div id="data-container">
-            
             <div class="filter-row">
                 <div class="filter-group">
                     <label>CATEGORY SELECTION</label>
                     <select id="category-select">
-                        <option value="">Select Category...</option>
+                        <option value="">-- Select Category --</option>
                         <option value="Computer/Internet Access">Computer/Internet Access</option>
                         <option value="Employment">Employment</option>
                         <option value="Ethnicity">Ethnicity</option>
@@ -140,26 +131,26 @@
                 </div>
                 <div class="filter-group">
                     <label>CENSUS TABLE SELECTION</label>
-                    <select id="table-select"><option value="">Select a category first</option></select>
+                    <select id="table-select"><option value="">Select Category First</option></select>
                 </div>
                 <div class="filter-group">
-                    <label>MAP LAYER VIEW</label>
+                    <label>MAP LAYER VIEW (CHOROPLETH)</label>
                     <select id="map-layer-select"><option value="default">Default Map</option></select>
                 </div>
             </div>
 
             <div class="kpi-row">
-                <div class="kpi-card"><span class="label">Total Population</span><span id="kpi-pop" class="value">0</span></div>
-                <div class="kpi-card"><span class="label">Total Households</span><span id="kpi-hh" class="value">0</span></div>
-                <div class="kpi-card"><span class="label">Median Income</span><span id="kpi-income" class="value">$0</span></div>
-                <div class="kpi-card"><span class="label">Median House Val</span><span id="kpi-house-val" class="value">$0</span></div>
-                <div class="kpi-card"><span class="label">Median Age</span><span id="kpi-age" class="value">0</span></div>
+                <div class="kpi-card"><span class="label">Total Population</span><span id="kpi-pop" class="value">-</span></div>
+                <div class="kpi-card"><span class="label">Total Households</span><span id="kpi-hh" class="value">-</span></div>
+                <div class="kpi-card"><span class="label">Median Income</span><span id="kpi-income" class="value">-</span></div>
+                <div class="kpi-card"><span class="label">Median House Value</span><span id="kpi-house-val" class="value">-</span></div>
+                <div class="kpi-card"><span class="label">Median Age</span><span id="kpi-age" class="value">-</span></div>
             </div>
 
             <div class="viz-row">
                 <div class="table-container">
                     <table id="data-table">
-                        <thead><tr><th>Census Parameter</th><th>Count</th></tr></thead>
+                        <thead><tr><th>Census Parameter</th><th>Count (Sum)</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -169,7 +160,7 @@
             </div>
 
             <div class="footer-note">
-                Data was collected from the 2023 5-year American Community Survey.
+                Data was collected from the 2023 5-year American Community Survey. All values are block-group aggregates.
             </div>
         </div>
     </div>
@@ -180,7 +171,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
     <script>
-    // Configuration Mapping
     const tableMapping = {
         'Computer/Internet Access': { folder: 'Computer and Internet Access', files: {'Computer/Internet Access': 'Computer and Internet Access by Household (DONE).csv'} },
         'Employment': { folder: 'Employment', files: {'Employment Status': 'Employment Status (DONE).csv', 'Household Income': 'Household Income (DONE).csv'} },
@@ -192,150 +182,141 @@
     };
 
     (async function() {
+        // 1. Setup Map
         const map = L.map('map').setView([34.7304, -86.5861], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        const drawnItems = new L.FeatureGroup().addTo(map);
+        const buildingsLayer = L.layerGroup().addTo(map);
+        let bgLayer, currentCSVData = [], activeBlockGroup = null, chartInstance = null, allBuildings = [];
 
-        let bgLayer, currentCSVData = [], activeBlockGroup = null, chartInstance = null;
-        const kpiData = {};
-
-        // Helper: Fetch and Parse CSV
+        // 2. Data Loading Helper
         async function loadCSV(path) {
-            const resp = await fetch(path);
-            const text = await resp.text();
-            return Papa.parse(text, { header: true, dynamicTyping: true }).data;
+            try {
+                const resp = await fetch(path);
+                const text = await resp.text();
+                return Papa.parse(text, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+            } catch(e) { console.error("CSV Load Error:", path); return []; }
         }
 
-        // Initialize KPIs (Sums all rows)
-        async function loadKPIs() {
-            const [popData, incomeData, houseValData, ageData] = await Promise.all([
-                loadCSV('Totals/Total Households.csv'),
-                loadCSV('Employment/Median Household Income (DONE).csv'),
-                loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv'),
-                loadCSV('Population-related/Median Age (DONE).csv')
-            ]);
-            
-            kpiData.raw = { popData, incomeData, houseValData, ageData };
-            updateKPIs(null); // Load default (all)
+        // 3. KPI Logic
+        let kpiRaw = {};
+        async function initKPIs() {
+            kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
+            kpiRaw.income = await loadCSV('Employment/Median Household Income (DONE).csv');
+            kpiRaw.house = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
+            kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
+            renderKPIs();
         }
 
-        function updateKPIs(geoid) {
-            const filter = (data) => geoid ? data.filter(r => r.GEO_ID === geoid) : data;
+        function renderKPIs(geoid = null) {
+            const filterRow = (data) => geoid ? data.filter(r => r.GEO_ID === geoid) : data;
             
-            const p = filter(kpiData.raw.popData).reduce((a, b) => a + (b.Total || 0), 0);
-            const i = filter(kpiData.raw.incomeData)[0]?.['Median household income (past 12 months)'] || 0;
-            const h = filter(kpiData.raw.houseValData)[0]?.['Median value ($)'] || 0;
-            const a = filter(kpiData.raw.ageData)[0]?.['Median Age'] || 0;
+            const popSum = filterRow(kpiRaw.pop).reduce((a, b) => a + (b.Total || 0), 0);
+            const incMed = filterRow(kpiRaw.income)[0]?.['Median household income (past 12 months)'] || 0;
+            const houseMed = filterRow(kpiRaw.house)[0]?.['Median value ($)'] || 0;
+            const ageMed = filterRow(kpiRaw.age)[0]?.['Median Age'] || 0;
 
-            document.getElementById('kpi-pop').innerText = p.toLocaleString();
-            document.getElementById('kpi-hh').innerText = p.toLocaleString(); // Using total column as requested
-            document.getElementById('kpi-income').innerText = '$' + i.toLocaleString();
-            document.getElementById('kpi-house-val').innerText = '$' + h.toLocaleString();
-            document.getElementById('kpi-age').innerText = a;
+            document.getElementById('kpi-pop').innerText = popSum.toLocaleString();
+            document.getElementById('kpi-hh').innerText = popSum.toLocaleString();
+            document.getElementById('kpi-income').innerText = incMed > 0 ? `$${incMed.toLocaleString()}` : "N/A";
+            document.getElementById('kpi-house-val').innerText = houseMed > 0 ? `$${houseMed.toLocaleString()}` : "N/A";
+            document.getElementById('kpi-age').innerText = ageMed || "N/A";
         }
 
-        // Dropdown Logic
-        const catSelect = document.getElementById('category-select');
-        const tabSelect = document.getElementById('table-select');
-        const mapLayerSelect = document.getElementById('map-layer-select');
-
-        catSelect.addEventListener('change', () => {
-            const cat = catSelect.value;
-            tabSelect.innerHTML = '<option value="">Select Table...</option>';
-            if (tableMapping[cat]) {
-                Object.keys(tableMapping[cat].files).forEach(t => {
-                    tabSelect.innerHTML += `<option value="${t}">${t}</option>`;
-                });
-            }
-        });
-
-        tabSelect.addEventListener('change', async () => {
-            const cat = catSelect.value;
-            const tab = tabSelect.value;
-            const filePath = `${tableMapping[cat].folder}/${tableMapping[cat].files[tab]}`;
-            
-            currentCSVData = await loadCSV(filePath);
-            
-            // Update Map Layer Dropdown
-            mapLayerSelect.innerHTML = '<option value="default">Default Map</option>';
-            if (currentCSVData.length > 0) {
-                Object.keys(currentCSVData[0]).forEach(col => {
-                    if (col !== 'GEO_ID' && col !== 'NAME' && !col.endsWith('_MOE')) {
-                        mapLayerSelect.innerHTML += `<option value="${col}">${col}</option>`;
-                    }
-                });
-            }
-            updateViz();
-        });
-
+        // 4. Visualization (Table + Chart)
         function updateViz() {
             const geoid = activeBlockGroup;
             const filtered = geoid ? currentCSVData.filter(r => r.GEO_ID === geoid) : currentCSVData;
-            
-            const sums = {};
-            const cols = Object.keys(currentCSVData[0] || {}).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')).sort();
+            if(!currentCSVData.length) return;
 
-            cols.forEach(col => {
-                sums[col] = filtered.reduce((a, b) => a + (Number(b[col]) || 0), 0);
-            });
+            const cols = Object.keys(currentCSVData[0]).filter(c => 
+                c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')
+            ).sort();
 
-            // Update Table
+            const sums = cols.map(c => ({
+                param: c,
+                val: filtered.reduce((sum, row) => sum + (Number(row[c]) || 0), 0)
+            }));
+
+            // Table
             const tbody = document.querySelector('#data-table tbody');
-            tbody.innerHTML = '';
-            cols.forEach(col => {
-                tbody.innerHTML += `<tr><td>${col}</td><td>${sums[col].toLocaleString()}</td></tr>`;
-            });
+            tbody.innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
 
-            // Update Chart
+            // Chart
             if (chartInstance) chartInstance.destroy();
             chartInstance = new Chart(document.getElementById('barChart'), {
                 type: 'bar',
                 data: {
-                    labels: cols,
-                    datasets: [{ label: 'Count', data: cols.map(c => sums[c]), backgroundColor: '#3388ff' }]
+                    labels: sums.map(s => s.param),
+                    datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#3388ff' }]
                 },
-                options: { indexAxis: 'y', maintainAspectRatio: false }
+                options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
         }
 
-        // Load GeoJSON and Map Interactivity
+        // 5. Interaction Controllers
+        document.getElementById('category-select').addEventListener('change', (e) => {
+            const mapping = tableMapping[e.target.value];
+            const ts = document.getElementById('table-select');
+            ts.innerHTML = '<option value="">-- Select Table --</option>';
+            if(mapping) Object.keys(mapping.files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
+        });
+
+        document.getElementById('table-select').addEventListener('change', async (e) => {
+            const cat = document.getElementById('category-select').value;
+            const tableKey = e.target.value;
+            if(!tableKey) return;
+
+            const file = tableMapping[cat].files[tableKey];
+            currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${file}`);
+            
+            const mls = document.getElementById('map-layer-select');
+            mls.innerHTML = '<option value="default">Default Map</option>';
+            Object.keys(currentCSVData[0] || {}).forEach(c => {
+                if(c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`;
+            });
+            updateViz();
+        });
+
+        // 6. Map Layers & Selection
         const bgData = await fetch('Huntsville_Block_Groups.geojson').then(res => res.json());
         bgLayer = L.geoJSON(bgData, {
-            style: { color: 'black', weight: 1, fillOpacity: 0.1 },
-            onEachFeature: (feature, layer) => {
-                layer.on('click', () => {
-                    const id = feature.properties.GEOIDFQ;
-                    if (activeBlockGroup === id) {
-                        activeBlockGroup = null; // Toggle off
-                        bgLayer.resetStyle(layer);
+            style: { color: '#333', weight: 1, fillOpacity: 0.1 },
+            onEachFeature: (f, l) => {
+                l.on('click', () => {
+                    const id = f.properties.GEOIDFQ;
+                    if(activeBlockGroup === id) {
+                        activeBlockGroup = null;
+                        bgLayer.resetStyle();
                     } else {
                         activeBlockGroup = id;
-                        bgLayer.setStyle({ fillOpacity: 0.1 }); // Reset others
-                        layer.setStyle({ fillColor: 'yellow', fillOpacity: 0.5 });
+                        bgLayer.setStyle({ fillOpacity: 0.05, color: '#999' });
+                        l.setStyle({ color: 'orange', weight: 3, fillOpacity: 0.2 });
                     }
-                    updateKPIs(activeBlockGroup);
+                    renderKPIs(activeBlockGroup);
                     updateViz();
                 });
             }
         }).addTo(map);
 
-        mapLayerSelect.addEventListener('change', () => {
-            const col = mapLayerSelect.value;
-            if (col === 'default') {
-                bgLayer.setStyle({ fillOpacity: 0.1, fillColor: 'black' });
-                activeBlockGroup = null;
-                updateKPIs(null);
-                updateViz();
-            } else {
-                const vals = currentCSVData.map(r => r[col] || 0);
-                const max = Math.max(...vals);
-                bgLayer.setStyle(f => ({
-                    fillColor: 'purple',
-                    fillOpacity: (currentCSVData.find(r => r.GEO_ID === f.properties.GEOIDFQ)?.[col] || 0) / max,
-                }));
-            }
+        document.getElementById('map-layer-select').addEventListener('change', (e) => {
+            const col = e.target.value;
+            if(col === 'default') return bgLayer.resetStyle();
+            
+            const vals = currentCSVData.map(r => r[col] || 0);
+            const max = Math.max(...vals);
+            bgLayer.setStyle(f => {
+                const row = currentCSVData.find(r => r.GEO_ID === f.properties.GEOIDFQ);
+                const val = row ? row[col] : 0;
+                return {
+                    fillColor: '#3f007d',
+                    fillOpacity: val > 0 ? (val / max) * 0.8 : 0
+                };
+            });
         });
 
-        loadKPIs();
+        initKPIs();
     })();
     </script>
 </body>
