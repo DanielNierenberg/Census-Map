@@ -9,31 +9,47 @@
     <style>
         :root { --dark-blue: #002f5d; --light-gray: #f4f7f6; --border-color: #ddd; }
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: var(--light-gray); overflow: hidden; }
+        
         #banner { height: 10%; width: 100%; background: var(--dark-blue); color: white; display: flex; align-items: center; padding-left: 20px; box-sizing: border-box; }
         #main-container { display: flex; height: 90%; padding: 10px; box-sizing: border-box; gap: 15px; }
-        #map-container { flex: 0 0 33%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
+        
+        /* Map Styles */
+        #map-container { flex: 0 0 35%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
         #map { height: 100%; width: 100%; }
-        #data-container { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; }
-        #search-panel { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); width: 220px; }
-        #address-search { width: 100%; padding: 4px; box-sizing: border-box; }
-        #suggestions { list-style: none; padding: 0; margin: 5px 0; max-height: 120px; overflow-y: auto; border: 1px solid #eee; font-size: 0.8em; }
-        #suggestions li { padding: 4px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
-        #suggestions li:hover { background: #f0f0f0; }
+        
+        /* Search Styles from Old Code */
+        #search-panel { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.2); width: 250px; }
+        #address-search { width: 100%; padding: 5px; box-sizing: border-box; }
+        #suggestions { list-style: none; padding: 0; margin: 5px 0; max-height: 150px; overflow-y: auto; border: 1px solid #eee; background: white; font-size: 0.85em; }
+        #suggestions li { padding: 8px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
+        #suggestions li:hover { background-color: #f0f0f0; }
+        #go-button { width: 100%; padding: 5px; margin-top: 5px; cursor: pointer; background: var(--dark-blue); color: white; border: none; border-radius: 4px; }
+        
+        .popup-container { text-align: center; padding: 5px; }
+        .popup-btn { display: block; width: 100%; margin: 5px 0; padding: 8px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8em; }
+        .btn-radius { background: #3388ff; color: white; border: none; font-weight: bold; }
+
+        /* Data Panel Styles */
+        #data-container { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
         .filter-row { display: flex; gap: 10px; }
         .filter-group { flex: 1; }
-        .filter-group label { display: block; font-size: 0.7em; font-weight: bold; margin-bottom: 3px; color: #555; }
+        .filter-group label { display: block; font-size: 0.7em; font-weight: bold; margin-bottom: 3px; color: #555; text-transform: uppercase; }
         select { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); }
+        
         .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
         .kpi-card { background: white; padding: 10px 5px; border-radius: 6px; text-align: center; border: 1px solid var(--border-color); }
-        .kpi-card .value { display: block; font-size: 1em; font-weight: bold; color: var(--dark-blue); }
+        .kpi-card .value { display: block; font-size: 1.1em; font-weight: bold; color: var(--dark-blue); }
         .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
-        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
+        
+        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 350px; }
         .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
         .chart-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); padding: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
-        th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
-        td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-        .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+        th { background: #f8f9fa; padding: 10px; text-align: left; position: sticky; top: 0; border-bottom: 2px solid #ddd; }
+        td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+        
+        .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; font-size: 0.8em; }
         .info.legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
     </style>
 </head>
@@ -46,18 +62,18 @@
         <div id="search-panel">
             <input type="text" id="address-search" placeholder="Type an address..." autocomplete="off">
             <ul id="suggestions"></ul>
-            <button id="go-button" style="width:100%; cursor:pointer;">Go</button>
+            <button id="go-button">Go</button>
         </div>
         <div id="map"></div>
-        <div style="position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:5px; border-radius:4px; font-size:0.7em; border:1px solid #ccc;">
-            Res. Buildings (Selected): <span id="count-display" style="font-weight:bold">0</span>
+        <div style="position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:8px; border-radius:4px; font-size:0.75em; border:1px solid #ccc; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            Res. Buildings (Selected): <span id="count-display" style="font-weight:bold; color:#00b894">0</span>
         </div>
     </div>
 
     <div id="data-container">
         <div class="filter-row">
             <div class="filter-group">
-                <label>CATEGORY SELECTION</label>
+                <label>Category</label>
                 <select id="category-select">
                     <option value="">-- Select --</option>
                     <option value="Computer/Internet Access">Computer/Internet Access</option>
@@ -70,11 +86,11 @@
                 </select>
             </div>
             <div class="filter-group">
-                <label>CENSUS TABLE SELECTION</label>
+                <label>Census Table</label>
                 <select id="table-select"><option value="">Select Category First</option></select>
             </div>
             <div class="filter-group">
-                <label>MAP LAYER VIEW</label>
+                <label>Map Layer View</label>
                 <select id="map-layer-select"><option value="default">Default Map</option></select>
             </div>
         </div>
@@ -96,7 +112,6 @@
             </div>
             <div class="chart-container"><canvas id="barChart"></canvas></div>
         </div>
-        <div style="font-size: 0.7em; color: #777;">Data was collected from the 2023 5-year American Community Survey.</div>
     </div>
 </div>
 
@@ -117,6 +132,7 @@ const tableMapping = {
 };
 
 (async function() {
+    // 1. Initialize Map
     const map = L.map('map', { renderer: L.canvas() }).setView([34.7304, -86.5861], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -128,63 +144,49 @@ const tableMapping = {
     let activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
     let currentShape = null;
 
-    // Fixed Initial Highlight (Issue 1)
-    const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
-
-    // City Limits
-    try {
-        const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-        L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.3, interactive: false } }).addTo(map);
-    } catch(e) {}
-
     async function loadCSV(path) {
         const r = await fetch(path);
         const t = await r.text();
         return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
     }
 
+    // 2. Load Core Geometries
     const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
+    try {
+        const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+        L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
+    } catch(e) {}
 
+    // Helper: Logic to determine which Block Groups are highlighted
     function getSelectedIDs() {
-        let ids = [];
         if (currentShape) {
-            ids = bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
-        } else if (activeBlockGroup) {
-            ids = [activeBlockGroup];
+            return bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
         }
-        return ids;
+        return activeBlockGroup ? [activeBlockGroup] : [];
     }
 
-function updateMapLayer() {
+    function updateMapLayer() {
         const selectedCol = document.getElementById('map-layer-select').value;
         const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
         const highlightedIDs = getSelectedIDs();
 
         bgLayer.eachLayer(layer => {
-            const props = layer.feature.properties;
-            const geoid = props.GEOIDFQ;
-
-            // 1. Get the correct row for NAME (Age/Gender CSV if default, otherwise current)
+            const geoid = layer.feature.properties.GEOIDFQ;
             const dataSource = (selectedCol === 'default') ? kpiRaw.age : currentCSVData;
             const row = (dataSource && dataSource.length) ? dataSource.find(r => r.GEO_ID === geoid) : null;
             
-            // 2. Transform NAME: "Block Group 1; Census Tract 2.03; Madison..." -> "Block Group 1, Census Tract 2.03"
-            let displayName = "Unknown Block Group";
+            // Name Transformation logic
+            let displayName = "Unknown";
             if (row && row.NAME) {
                 const parts = row.NAME.split(';');
                 displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
             }
 
-            // 3. Set Tooltip
             let tip = `Block Group: ${displayName}<br>GEO_ID: ${geoid}`;
-            if (selectedCol !== 'default' && row) {
-                tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
-            }
+            if (selectedCol !== 'default' && row) tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
             layer.bindTooltip(tip);
 
-            // 4. Styling & Selection
             let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
-            
             if (selectedCol !== 'default') {
                 const val = row?.[selectedCol] || 0;
                 style.fill = true;
@@ -192,44 +194,28 @@ function updateMapLayer() {
                 style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
             }
 
-            // Highlight Logic (Yellow Glow for drawn shapes or clicks)
+            // Yellow Glow for Selection (including shape intersection)
             if (highlightedIDs.includes(geoid)) {
                 style.color = '#ffff00';
                 style.weight = 4;
                 style.opacity = 1;
             }
-            
             layer.setStyle(style);
         });
-
-        if (selectedCol !== 'default') {
-            legend.onAdd = function() {
-                const div = L.DomUtil.create('div', 'info legend');
-                const grades = [0, max*0.25, max*0.5, max*0.75];
-                div.innerHTML = `<strong>${selectedCol}</strong><br>`;
-                for (let i = 0; i < grades.length; i++) {
-                    div.innerHTML += `<i style="background:#3f007d; opacity:${(grades[i]/max) || 0.1}"></i> ${Math.round(grades[i])}+<br>`;
-                }
-                return div;
-            };
-            legend.addTo(map);
-        } else {
-            legend.remove(map);
-        }
     }
 
     bgLayer = L.geoJSON(bgData, {
-        style: initialStyle,
+        style: { color: 'black', weight: 1, fillOpacity: 0 },
         onEachFeature: (feature, layer) => {
             layer.on('click', () => {
-                const id = feature.properties.GEOIDFQ;
-                drawnItems.clearLayers(); currentShape = null; // Reset shape if clicking individual
-                activeBlockGroup = (activeBlockGroup === id) ? null : id;
+                drawnItems.clearLayers(); currentShape = null; 
+                activeBlockGroup = (activeBlockGroup === feature.properties.GEOIDFQ) ? null : feature.properties.GEOIDFQ;
                 updateMapLayer(); updateKPIs(); updateViz();
             });
         }
     }).addTo(map);
 
+    // 3. KPI & Viz Functions
     let kpiRaw = {};
     async function initKPIs() {
         kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
@@ -237,6 +223,7 @@ function updateMapLayer() {
         kpiRaw.hou = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
         kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
         updateKPIs();
+        updateMapLayer(); // Run once after age data loads to ensure tooltips work
     }
 
     function updateKPIs() {
@@ -268,39 +255,80 @@ function updateMapLayer() {
         });
     }
 
+    // 4. Drawing & Building Search Integration
+    function runBuildingSearch(filterShape) {
+        buildingsLayer.clearLayers();
+        const results = allBuildings.filter(b => turf.booleanIntersects(b, filterShape));
+        document.getElementById('count-display').innerText = results.length.toLocaleString();
+        L.geoJSON(results, { style: { color: '#00b894', weight: 1, fillOpacity: 0.6 } }).addTo(buildingsLayer);
+    }
+
     const drawControl = new L.Control.Draw({ draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true }, edit: false });
     map.addControl(drawControl);
 
     map.on('draw:created', e => {
         drawnItems.clearLayers(); 
         drawnItems.addLayer(e.layer);
-        activeBlockGroup = null; // Issue 2: Reset individual selection when drawing new shape
+        activeBlockGroup = null;
         currentShape = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius() / 1000, { units: 'kilometers' }) : e.layer.toGeoJSON();
-        
-        buildingsLayer.clearLayers();
-        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
-        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-        L.geoJSON(bResults, { style: { color: '#00b894', weight: 1, fillOpacity: 0.6 } }).addTo(buildingsLayer);
-
+        runBuildingSearch(currentShape);
         updateMapLayer(); updateKPIs(); updateViz();
     });
 
-    // Clear Button
-    const clearBtn = L.control({position: 'topright'});
-    clearBtn.onAdd = () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = '<a href="#" title="Clear" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
-        div.onclick = (e) => { 
-            e.preventDefault(); buildingsLayer.clearLayers(); drawnItems.clearLayers(); 
-            currentShape = null; activeBlockGroup = null; 
-            document.getElementById('map-layer-select').value = 'default';
-            updateMapLayer(); updateKPIs(); updateViz();
-        };
-        return div;
-    };
-    clearBtn.addTo(map);
+    // 5. Address Search Logic (Integrated from Old Code)
+    const searchInput = document.getElementById('address-search');
+    const suggs = document.getElementById('suggestions');
+    
+    searchInput.addEventListener('input', () => {
+        const q = searchInput.value.toLowerCase();
+        suggs.innerHTML = '';
+        if (!q) return;
+        const matches = allAddresses.filter(f => f.properties.Street_Address.toLowerCase().includes(q)).slice(0, 10);
+        matches.forEach(f => {
+            const li = document.createElement('li');
+            li.textContent = f.properties.Street_Address;
+            li.onclick = () => {
+                searchInput.value = f.properties.Street_Address;
+                selectedCoords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+                suggs.innerHTML = '';
+            };
+            suggs.appendChild(li);
+        });
+    });
 
-    // Issue 3: Home Button
+    document.getElementById('go-button').onclick = () => {
+        if (!selectedCoords) return alert('Select an address first');
+        if (currentMarker) map.removeLayer(currentMarker);
+        map.setView(selectedCoords, 17);
+        currentMarker = L.circleMarker(selectedCoords, { radius: 10, color: 'red', fillOpacity: 0.8 }).addTo(map);
+        
+        // Find which block group the point is in to highlight it
+        const pt = turf.point([selectedCoords[1], selectedCoords[0]]);
+        const parent = bgData.features.find(bg => turf.booleanPointInPolygon(pt, bg));
+        activeBlockGroup = parent ? parent.properties.GEOIDFQ : null;
+        currentShape = null; drawnItems.clearLayers();
+
+        const container = document.createElement('div');
+        container.className = 'popup-container';
+        container.innerHTML = `<strong>${searchInput.value}</strong><br><button class="popup-btn btn-radius" id="pop-radius">Enter Mile Radius</button>`;
+        currentMarker.bindPopup(container).openPopup();
+
+        container.querySelector('#pop-radius').onclick = () => {
+            const m = prompt("Enter radius in miles:");
+            if (m && !isNaN(m)) {
+                currentShape = turf.circle([selectedCoords[1], selectedCoords[0]], parseFloat(m) * 1.60934, { units: 'kilometers' });
+                drawnItems.clearLayers();
+                L.geoJSON(currentShape, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                activeBlockGroup = null;
+                runBuildingSearch(currentShape);
+                updateMapLayer(); updateKPIs(); updateViz();
+                map.closePopup();
+            }
+        };
+        updateMapLayer(); updateKPIs(); updateViz();
+    };
+
+    // 6. Navigation Controls
     const homeBtn = L.control({position: 'topright'});
     homeBtn.onAdd = () => {
         const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -310,10 +338,28 @@ function updateMapLayer() {
     };
     homeBtn.addTo(map);
 
+    const clearBtn = L.control({position: 'topright'});
+    clearBtn.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Clear" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
+        div.onclick = (e) => { 
+            e.preventDefault(); buildingsLayer.clearLayers(); drawnItems.clearLayers(); 
+            if (currentMarker) map.removeLayer(currentMarker);
+            currentShape = null; activeBlockGroup = null; searchInput.value = '';
+            document.getElementById('count-display').innerText = "0";
+            updateMapLayer(); updateKPIs(); updateViz();
+        };
+        return div;
+    };
+    clearBtn.addTo(map);
+
+    // 7. Event Listeners for Dropdowns
     document.getElementById('category-select').addEventListener('change', (e) => {
         const ts = document.getElementById('table-select');
         ts.innerHTML = '<option value="">-- Select --</option>';
-        if (tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
+        if (tableMapping[e.target.value]) {
+            Object.keys(tableMapping[e.target.value].files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
+        }
     });
 
     document.getElementById('table-select').addEventListener('change', async (e) => {
@@ -322,15 +368,20 @@ function updateMapLayer() {
         currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${tableMapping[cat].files[e.target.value]}`);
         const mls = document.getElementById('map-layer-select');
         mls.innerHTML = '<option value="default">Default Map</option>';
-        Object.keys(currentCSVData[0]).forEach(c => { if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; });
+        Object.keys(currentCSVData[0]).forEach(c => { 
+            if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; 
+        });
         updateViz();
     });
 
     document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
     
-    // Load Buildings
+    // Load Files in Background
     const bFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
     for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features)); }
+    
+    const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
+    for (const f of aFiles) { fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features)); }
     
     initKPIs();
 })();
