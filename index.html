@@ -319,17 +319,63 @@ const tableMapping = {
             const li = document.createElement('li');
             li.textContent = f.properties.Street_Address;
             li.onclick = () => {
-                searchInput.value = f.properties.Street_Address;
+                const addressText = f.properties.Street_Address;
+                searchInput.value = addressText;
                 const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
                 suggestionsList.innerHTML = '';
+                
+                // 1. Move map and place marker
                 map.setView(coords, 17);
                 if (currentMarker) map.removeLayer(currentMarker);
-                currentMarker = L.marker(coords).addTo(map);
+                currentMarker = L.circleMarker(coords, { radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.8 }).addTo(map);
 
-                // Auto-select Block Group
+                // 2. Create the Popup with the Radius Button
+                const container = document.createElement('div');
+                container.style.textAlign = 'center';
+                container.innerHTML = `
+                    <div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
+                    <button id="pop-radius" style="display:block; width:100%; margin-bottom:5px; padding:8px; background:#002f5d; color:white; border:none; border-radius:4px; cursor:pointer;">Enter Mile Radius</button>
+                    <button id="pop-cancel" style="display:block; width:100%; padding:5px; background:none; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Cancel</button>
+                `;
+                
+                currentMarker.bindPopup(container).openPopup();
+
+                // 3. Handle the Radius Click
+                container.querySelector('#pop-radius').onclick = () => {
+                    const miles = prompt("Enter radius in miles:");
+                    if (miles && !isNaN(miles)) {
+                        // Convert miles to kilometers for Turf
+                        const radiusKm = parseFloat(miles) * 1.60934;
+                        const circleGeoJSON = turf.circle([f.geometry.coordinates[0], f.geometry.coordinates[1]], radiusKm, { units: 'kilometers' });
+                        
+                        // Clear old shapes and add the new radius circle
+                        drawnItems.clearLayers();
+                        activeBlockGroup = null; // Clear individual block group selection
+                        currentShape = circleGeoJSON; // Set this as the active shape for KPIs
+                        
+                        L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                        
+                        // Update buildings count
+                        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+                        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+                        
+                        buildingsLayer.clearLayers();
+                        L.geoJSON(bResults, { style: { color: '#00b894', weight: 1, fillOpacity: 0.6 } }).addTo(buildingsLayer);
+
+                        // Update Dashboard Data
+                        updateMapLayer();
+                        updateKPIs();
+                        updateViz();
+                        map.closePopup();
+                    }
+                };
+
+                container.querySelector('#pop-cancel').onclick = () => map.closePopup();
+
+                // 4. Auto-select the specific Block Group the point sits in
                 const point = turf.point([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
                 const match = bgData.features.find(bg => turf.booleanPointInPolygon(point, bg));
-                if (match) {
+                if (match && !currentShape) { // Only auto-select if we haven't drawn a radius yet
                     activeBlockGroup = match.properties.GEOIDFQ;
                     updateMapLayer(); updateKPIs(); updateViz();
                 }
