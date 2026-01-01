@@ -155,7 +155,7 @@ const tableMapping = {
         return ids;
     }
 
-    function updateMapLayer() {
+function updateMapLayer() {
         const selectedCol = document.getElementById('map-layer-select').value;
         const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
         const highlightedIDs = getSelectedIDs();
@@ -163,12 +163,26 @@ const tableMapping = {
         bgLayer.eachLayer(layer => {
             const props = layer.feature.properties;
             const geoid = props.GEOIDFQ;
-            const row = currentCSVData.find(r => r.GEO_ID === geoid);
+
+            // 1. Get the correct row for NAME (Age/Gender CSV if default, otherwise current)
+            const dataSource = (selectedCol === 'default') ? kpiRaw.age : currentCSVData;
+            const row = (dataSource && dataSource.length) ? dataSource.find(r => r.GEO_ID === geoid) : null;
             
-            let tip = `Block Group: ${props.NAME}<br>GEO_ID: ${geoid}`;
-            if (selectedCol !== 'default' && row) tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
+            // 2. Transform NAME: "Block Group 1; Census Tract 2.03; Madison..." -> "Block Group 1, Census Tract 2.03"
+            let displayName = "Unknown Block Group";
+            if (row && row.NAME) {
+                const parts = row.NAME.split(';');
+                displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
+            }
+
+            // 3. Set Tooltip
+            let tip = `Block Group: ${displayName}<br>GEO_ID: ${geoid}`;
+            if (selectedCol !== 'default' && row) {
+                tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
+            }
             layer.bindTooltip(tip);
 
+            // 4. Styling & Selection
             let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
             
             if (selectedCol !== 'default') {
@@ -178,7 +192,7 @@ const tableMapping = {
                 style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
             }
 
-            // Issue 2: Highlight all selected/intersecting groups in yellow
+            // Highlight Logic (Yellow Glow for drawn shapes or clicks)
             if (highlightedIDs.includes(geoid)) {
                 style.color = '#ffff00';
                 style.weight = 4;
