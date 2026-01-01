@@ -35,21 +35,9 @@
         .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
 
         /* Visualization Area */
-        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 350px; }
+        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
         .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
-        
-        /* Scrollable Chart Styles */
-        .chart-container { 
-            flex: 1; 
-            background: white; 
-            border-radius: 6px; 
-            border: 1px solid var(--border-color); 
-            padding: 10px; 
-            overflow-x: auto; /* Enable horizontal scroll */
-            overflow-y: hidden; 
-        }
-        #chart-wrapper { height: 100%; min-width: 100%; }
-
+        .chart-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); padding: 10px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
         th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
         td { padding: 6px 8px; border-bottom: 1px solid #eee; }
@@ -116,11 +104,7 @@
                     <tbody></tbody>
                 </table>
             </div>
-            <div class="chart-container">
-                <div id="chart-wrapper">
-                    <canvas id="barChart"></canvas>
-                </div>
-            </div>
+            <div class="chart-container"><canvas id="barChart"></canvas></div>
         </div>
         <div style="font-size: 0.7em; color: #777;">Data was collected from the 2023 5-year American Community Survey.</div>
     </div>
@@ -143,6 +127,7 @@ const tableMapping = {
 };
 
 (async function() {
+    // 1. Map Init
     const map = L.map('map', { renderer: L.canvas() }).setView([34.7304, -86.5861], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -150,12 +135,14 @@ const tableMapping = {
     const drawnItems = new L.FeatureGroup().addTo(map);
     let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [], activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
 
+    // 2. Data Fetching
     async function loadCSV(path) {
         const r = await fetch(path);
         const t = await r.text();
         return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
     }
 
+    // Load Geometry & Addresses
     try {
         const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
         bgLayer = L.geoJSON(bgData, {
@@ -177,6 +164,7 @@ const tableMapping = {
         for (const f of aFiles) { const d = await fetch(f).then(r => r.json()); allAddresses = allAddresses.concat(d.features); }
     } catch(e) { console.error("Load Error", e); }
 
+    // 3. KPI & Viz Updates
     let kpiRaw = {};
     async function initKPIs() {
         kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
@@ -199,65 +187,43 @@ const tableMapping = {
         document.getElementById('kpi-age').innerText = a || 'N/A';
     }
 
-    function updateViz() {
-        if (!currentCSVData.length) return;
-        const tableName = document.getElementById('table-select').value;
-        const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
-        
-        const cols = Object.keys(currentCSVData[0]).filter(c => {
-            let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
-            if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
-            return keep;
-        });
-        
-        const sums = cols.map(c => ({ 
-            param: c, 
-            val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) 
-        }));
+ function updateViz() {
+    if (!currentCSVData.length) return;
+    const tableName = document.getElementById('table-select').value;
+    const filtered = activeBlockGroup ? currentCSVData.filter(r => r.GEO_ID === activeBlockGroup) : currentCSVData;
+    
+    // Get columns and filter out IDs and the "Total Buildings" if necessary
+    const cols = Object.keys(currentCSVData[0]).filter(c => {
+        let keep = c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE');
+        if (tableName === 'Year Housing Built' && c === 'Total Buildings') keep = false;
+        return keep;
+    });
+    
+    // 1. Calculate the sums for each parameter
+    const sums = cols.map(c => ({ 
+        param: c, 
+        val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) 
+    }));
 
-        sums.sort((a, b) => b.val - a.val);
+    // 2. Sort the array from highest value to lowest
+    sums.sort((a, b) => b.val - a.val);
 
-        document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
-        
-        // --- DYNAMIC WIDTH CALCULATION ---
-        const canvas = document.getElementById('barChart');
-        const wrapper = document.getElementById('chart-wrapper');
-        const barWidthConstant = 300 / 11; 
-        const calculatedWidth = Math.max(300, sums.length * barWidthConstant);
-        wrapper.style.width = calculatedWidth + "px";
-        
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(canvas, {
-            type: 'bar', 
-            data: { 
-                labels: sums.map(s => s.param), 
-                datasets: [{ 
-                    label: 'Count', 
-                    data: sums.map(s => s.val), 
-                    backgroundColor: '#002f5d',
-                    barPercentage: 0.8,
-                    categoryPercentage: 0.9
-                }] 
-            },
-            options: { 
-                indexAxis: 'x', 
-                maintainAspectRatio: false,
-                responsive: true,
-                scales: {
-                    x: {
-                        ticks: {
-                            autoSkip: false,
-                            maxRotation: 45,
-                            minRotation: 45,
-                            font: { size: 10 }
-                        }
-                    }
-                },
-                plugins: { legend: { display: false } }
-            }
-        });
-    }
+    // 3. Update Table
+    document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
+    
+    // 4. Update Chart
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar', 
+        data: { 
+            labels: sums.map(s => s.param), 
+            datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#002f5d' }] 
+        },
+        options: { indexAxis: 'y', maintainAspectRatio: false }
+    });
+}
 
+    // 4. Dropdowns
     document.getElementById('category-select').addEventListener('change', (e) => {
         const ts = document.getElementById('table-select');
         ts.innerHTML = '<option value="">-- Select --</option>';
@@ -288,6 +254,7 @@ const tableMapping = {
         });
     });
 
+    // 5. Building Search & Address
     function runBuildingSearch(shape) {
         buildingsLayer.clearLayers();
         const results = allBuildings.filter(b => turf.booleanIntersects(b, shape));
@@ -335,6 +302,7 @@ const tableMapping = {
         };
     };
 
+    // Extra Buttons
     const clearBtn = L.control({position: 'topright'});
     clearBtn.onAdd = () => {
         const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
