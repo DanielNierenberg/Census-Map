@@ -174,18 +174,41 @@ const tableMapping = {
         updateKPIs();
     }
 
-    function updateKPIs() {
-        const filter = (data) => activeBlockGroup ? data.filter(r => r.GEO_ID === activeBlockGroup) : data;
-        const p = filter(kpiRaw.pop).reduce((a, b) => a + (b.Total || 0), 0);
-        const i = filter(kpiRaw.inc)[0]?.['Median household income (past 12 months)'] || 0;
-        const h = filter(kpiRaw.hou)[0]?.['Median value ($)'] || 0;
-        const a = filter(kpiRaw.age)[0]?.['Median Age'] || 0;
-        document.getElementById('kpi-pop').innerText = p.toLocaleString();
-        document.getElementById('kpi-hh').innerText = p.toLocaleString();
-        document.getElementById('kpi-income').innerText = i > 0 ? '$' + i.toLocaleString() : 'N/A';
-        document.getElementById('kpi-house-val').innerText = h > 0 ? '$' + h.toLocaleString() : 'N/A';
-        document.getElementById('kpi-age').innerText = a || 'N/A';
-    }
+ function updateKPIs() {
+    const filter = (data) => activeBlockGroup ? data.filter(r => r.GEO_ID === activeBlockGroup) : data;
+    
+    // 1. Total Population / Households
+    const p = filter(kpiRaw.pop).reduce((a, b) => a + (Number(b.Total) || 0), 0);
+    
+    // 2. Median Income
+    const rawInc = filter(kpiRaw.inc)[0]?.['Median household income (past 12 months)'];
+    const incomeValue = (rawInc === 'N/A' || rawInc === undefined || rawInc === null) ? 'N/A' : rawInc;
+
+    // 3. Median House Value (The specific fix you requested)
+    const rawHou = filter(kpiRaw.hou)[0]?.['Median value ($)'];
+    const houseValue = (rawHou === 'N/A' || rawHou === undefined || rawHou === null) ? 'N/A' : rawHou;
+
+    // 4. Median Age
+    const rawAge = filter(kpiRaw.age)[0]?.['Median Age'];
+    const ageValue = (rawAge === 'N/A' || rawAge === undefined || rawAge === null) ? 'N/A' : rawAge;
+
+    // Update DOM
+    document.getElementById('kpi-pop').innerText = p.toLocaleString();
+    document.getElementById('kpi-hh').innerText = p.toLocaleString();
+    
+    // Display with $ sign only if it's a number
+    document.getElementById('kpi-income').innerText = (incomeValue !== 'N/A') 
+        ? '$' + Number(incomeValue).toLocaleString() 
+        : 'N/A';
+        
+    document.getElementById('kpi-house-val').innerText = (houseValue !== 'N/A') 
+        ? '$' + Number(houseValue).toLocaleString() 
+        : 'N/A';
+        
+    document.getElementById('kpi-age').innerText = (ageValue !== 'N/A') 
+        ? ageValue 
+        : 'N/A';
+}
 
  function updateViz() {
     if (!currentCSVData.length) return;
