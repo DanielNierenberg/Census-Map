@@ -211,7 +211,7 @@ const tableMapping = {
 
             if (highlightedIDs.includes(geoid)) {
                 // Request 5: Changed glow to Cyan for better contrast
-                style.color = '#00ffff'; style.weight = 4; style.opacity = 1;
+                style.color = '#FF0000'; style.weight = 4; style.opacity = 1;
             }
             layer.setStyle(style);
         });
@@ -295,8 +295,8 @@ const tableMapping = {
         buildingsLayer.clearLayers();
         const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
         document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-        // Request 5: Building fill color to stand out (Pink/Magenta)
-        L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
+        // Request 5: Building fill color to stand out (Yellow)
+        L.geoJSON(bResults, { style: { color: '#FF0000', weight: 2, fillColor: '#FFFF00', fillOpacity: 0.7 } }).addTo(buildingsLayer);
         updateMapLayer(); updateKPIs(); updateViz();
     });
 
