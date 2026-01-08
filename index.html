@@ -7,16 +7,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --dark-blue: #002f5d; --light-gray: #f4f7f6; --border-color: #ddd; --accent-color: #ff00ff; }
+        :root { --dark-blue: #002f5d; --light-gray: #f4f7f6; --border-color: #ddd; }
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: var(--light-gray); overflow: hidden; }
         
-        /* Request 1 & 2: Centered title and half-height (5%) banner */
         #banner { height: 5%; width: 100%; background: var(--dark-blue); color: white; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
         #banner h1 { font-size: 1.2rem; margin: 0; }
 
         #main-container { display: flex; height: 95%; padding: 10px; box-sizing: border-box; gap: 15px; transition: all 0.3s ease; }
-        
-        /* Request 3: Setup for Map Expansion */
         #map-container { flex: 0 0 33%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: flex 0.3s ease; }
         #map-container.expanded { flex: 0 0 100%; }
         #map { height: 100%; width: 100%; }
@@ -30,10 +27,9 @@
         #suggestions li { padding: 6px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
         #suggestions li:hover { background: #f0f0f0; }
         
-        /* Request 4: Custom Radius Modal (To avoid 'github.io says') */
-        #radius-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2000; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 200px; text-align: center; }
-        #radius-modal input { width: 80%; padding: 5px; margin: 10px 0; }
-        #radius-modal button { padding: 5px 15px; cursor: pointer; background: var(--dark-blue); color: white; border: none; border-radius: 4px; }
+        /* Request 1: New Map-Anchored Radius Pop-up */
+        .radius-popup-box { background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); border: 1px solid #999; text-align: center; pointer-events: auto; }
+        .radius-popup-box input { width: 60px; margin: 5px; }
 
         .filter-row { display: flex; gap: 10px; }
         .filter-group { flex: 1; }
@@ -56,14 +52,6 @@
 <body>
 
 <div id="banner"><h1>Huntsville ACS 2023 5-year Block Group Data</h1></div>
-
-<div id="radius-modal">
-    <div>Enter radius in miles:</div>
-    <input type="number" id="radius-input" step="0.1" value="1.0">
-    <br>
-    <button id="radius-submit">Submit</button>
-    <button id="radius-cancel" style="background:#ccc; color:black;">Cancel</button>
-</div>
 
 <div id="main-container">
     <div id="map-container">
@@ -148,12 +136,11 @@ const tableMapping = {
     const legend = L.control({position: 'bottomright'});
     
     let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [];
-    let activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
+    let activeBlockGroup = null, chartInstance = null, currentMarker = null;
     let currentShape = null;
 
     const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
 
-    // Request 5: City Limits lighter (0.1)
     try {
         const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
         L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
@@ -168,13 +155,33 @@ const tableMapping = {
     const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
 
     function getSelectedIDs() {
-        let ids = [];
-        if (currentShape) {
-            ids = bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
-        } else if (activeBlockGroup) {
-            ids = [activeBlockGroup];
-        }
-        return ids;
+        if (currentShape) return bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
+        return activeBlockGroup ? [activeBlockGroup] : [];
+    }
+
+    // Request 2 Logic: Dynamic Building Color based on data intensity
+    function updateBuildings(shape) {
+        buildingsLayer.clearLayers();
+        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, shape));
+        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+
+        const selectedCol = document.getElementById('map-layer-select').value;
+        const maxVal = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
+
+        L.geoJSON(bResults, {
+            style: (feature) => {
+                let color = '#4a148c'; // Default Building Purple
+                // Find which block group this building is in
+                const parentBG = bgData.features.find(bg => turf.booleanPointInPolygon(turf.centroid(feature), bg));
+                if (parentBG && selectedCol !== 'default') {
+                    const row = currentCSVData.find(r => r.GEO_ID === parentBG.properties.GEOIDFQ);
+                    const val = row?.[selectedCol] || 0;
+                    // If in the top 25% of the data range (Darkest Purple area)
+                    if (val > (maxVal * 0.75)) color = '#ffff00'; // Change to Yellow
+                }
+                return { color: color, weight: 1, fillOpacity: 0.7 };
+            }
+        }).addTo(buildingsLayer);
     }
 
     function updateMapLayer() {
@@ -183,10 +190,8 @@ const tableMapping = {
         const highlightedIDs = getSelectedIDs();
 
         bgLayer.eachLayer(layer => {
-            const props = layer.feature.properties;
-            const geoid = props.GEOIDFQ;
-            const dataSource = (selectedCol === 'default') ? kpiRaw.age : currentCSVData;
-            const row = (dataSource && dataSource.length) ? dataSource.find(r => r.GEO_ID === geoid) : null;
+            const geoid = layer.feature.properties.GEOIDFQ;
+            const row = currentCSVData.find(r => r.GEO_ID === geoid);
             
             let displayName = "Unknown";
             if (row && row.NAME) {
@@ -194,24 +199,20 @@ const tableMapping = {
                 displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
             }
 
-            // Request 6: Removed "Block Group:" text
             let tip = `${displayName}<br>GEO_ID: ${geoid}`;
-            if (selectedCol !== 'default' && row) {
-                tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
-            }
+            if (selectedCol !== 'default' && row) tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
             layer.bindTooltip(tip);
 
             let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
             if (selectedCol !== 'default') {
                 const val = row?.[selectedCol] || 0;
-                style.fill = true;
-                style.fillColor = '#4a148c'; // Deep Purple
+                style.fill = true; style.fillColor = '#4a148c';
                 style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
             }
 
             if (highlightedIDs.includes(geoid)) {
-                // Request 5: Changed glow to Cyan for better contrast
-                style.color = '#00ffff'; style.weight = 4; style.opacity = 1;
+                // Request 2: Original Yellow Glow
+                style.color = '#ffff00'; style.weight = 4; style.opacity = 1;
             }
             layer.setStyle(style);
         });
@@ -236,9 +237,8 @@ const tableMapping = {
         style: initialStyle,
         onEachFeature: (feature, layer) => {
             layer.on('click', () => {
-                const id = feature.properties.GEOIDFQ;
                 drawnItems.clearLayers(); currentShape = null;
-                activeBlockGroup = (activeBlockGroup === id) ? null : id;
+                activeBlockGroup = (activeBlockGroup === feature.properties.GEOIDFQ) ? null : feature.properties.GEOIDFQ;
                 updateMapLayer(); updateKPIs(); updateViz();
             });
         }
@@ -250,9 +250,7 @@ const tableMapping = {
         kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
         kpiRaw.hou = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
         kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
-        updateKPIs();
-        // Request 7: Force tooltip update on load
-        updateMapLayer();
+        updateKPIs(); updateMapLayer();
     }
 
     function updateKPIs() {
@@ -288,89 +286,39 @@ const tableMapping = {
     map.addControl(drawControl);
 
     map.on('draw:created', e => {
-        drawnItems.clearLayers(); 
-        drawnItems.addLayer(e.layer);
-        activeBlockGroup = null;
+        drawnItems.clearLayers(); drawnItems.addLayer(e.layer); activeBlockGroup = null;
         currentShape = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius() / 1000, { units: 'kilometers' }) : e.layer.toGeoJSON();
-        buildingsLayer.clearLayers();
-        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
-        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-        // Request 5: Building fill color to stand out (Pink/Magenta)
-        L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
-        updateMapLayer(); updateKPIs(); updateViz();
+        updateBuildings(currentShape); updateMapLayer(); updateKPIs(); updateViz();
     });
 
-    const clearBtn = L.control({position: 'topright'});
-    clearBtn.onAdd = () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = '<a href="#" title="Clear" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
-        div.onclick = (e) => { 
-            e.preventDefault(); 
-            buildingsLayer.clearLayers(); drawnItems.clearLayers();
+    // Control Buttons
+    const btnBox = L.control({position: 'topright'});
+    btnBox.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar');
+        div.style.background = 'white';
+        div.innerHTML = `
+            <a href="#" id="clr-btn" title="Clear" style="display:flex;align-items:center;justify-content:center;height:30px;width:30px;text-decoration:none;">❌</a>
+            <a href="#" id="hm-btn" title="Home" style="display:flex;align-items:center;justify-content:center;height:30px;width:30px;text-decoration:none;">🏠</a>
+            <a href="#" id="exp-btn" title="Expand" style="display:flex;align-items:center;justify-content:center;height:30px;width:30px;text-decoration:none;font-weight:bold;">⤢</a>
+        `;
+        div.querySelector('#clr-btn').onclick = (e) => {
+            e.preventDefault(); buildingsLayer.clearLayers(); drawnItems.clearLayers();
             if (currentMarker) map.removeLayer(currentMarker);
-            document.getElementById('address-search').value = '';
-            document.getElementById('suggestions').innerHTML = '';
-            currentShape = null; activeBlockGroup = null; 
-            document.getElementById('map-layer-select').value = 'default';
-            document.getElementById('count-display').innerText = "0";
+            currentShape = null; activeBlockGroup = null; document.getElementById('count-display').innerText = "0";
             updateMapLayer(); updateKPIs(); updateViz();
         };
-        return div;
-    };
-    clearBtn.addTo(map);
-
-    const homeBtn = L.control({position: 'topright'});
-    homeBtn.onAdd = () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = '<a href="#" title="Home" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🏠</a>';
-        div.onclick = (e) => { e.preventDefault(); map.setView([34.7304, -86.5861], 12); };
-        return div;
-    };
-    homeBtn.addTo(map);
-
-    // Request 3: Expand Map Button
-    const expandBtn = L.control({position: 'topright'});
-    expandBtn.onAdd = () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-        div.innerHTML = '<a href="#" title="Expand Map" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-weight:bold;">⤢</a>';
-        div.onclick = (e) => { 
+        div.querySelector('#hm-btn').onclick = (e) => { e.preventDefault(); map.setView([34.7304, -86.5861], 12); };
+        div.querySelector('#exp-btn').onclick = (e) => {
             e.preventDefault(); 
-            const container = document.getElementById('map-container');
-            const dataSide = document.getElementById('data-container');
-            container.classList.toggle('expanded');
-            dataSide.classList.toggle('hidden');
-            setTimeout(() => map.invalidateSize(), 350); // Resize Leaflet after transition
+            document.getElementById('map-container').classList.toggle('expanded');
+            document.getElementById('data-container').classList.toggle('hidden');
+            setTimeout(() => map.invalidateSize(), 350);
         };
         return div;
     };
-    expandBtn.addTo(map);
+    btnBox.addTo(map);
 
-    // Request 4 Logic: Custom Modal instead of Browser Prompt
-    const radiusModal = document.getElementById('radius-modal');
-    const radiusInput = document.getElementById('radius-input');
-    let pendingAddressCoords = null;
-
-    document.getElementById('radius-submit').onclick = () => {
-        const miles = radiusInput.value;
-        if (miles && !isNaN(miles) && pendingAddressCoords) {
-            const radiusKm = parseFloat(miles) * 1.60934;
-            const circleGeoJSON = turf.circle(pendingAddressCoords, radiusKm, { units: 'kilometers' });
-            drawnItems.clearLayers();
-            activeBlockGroup = null;
-            currentShape = circleGeoJSON;
-            L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
-            const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
-            document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-            buildingsLayer.clearLayers();
-            L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
-            updateMapLayer(); updateKPIs(); updateViz();
-            map.closePopup();
-            radiusModal.style.display = 'none';
-        }
-    };
-    document.getElementById('radius-cancel').onclick = () => radiusModal.style.display = 'none';
-
-    // --- SEARCH LOGIC ---
+    // --- SEARCH & RADIUS LOGIC ---
     const searchInput = document.getElementById('address-search');
     const suggestionsList = document.getElementById('suggestions');
 
@@ -383,38 +331,42 @@ const tableMapping = {
             const li = document.createElement('li');
             li.textContent = f.properties.Street_Address;
             li.onclick = () => {
-                const addressText = f.properties.Street_Address;
-                searchInput.value = addressText;
                 const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+                searchInput.value = f.properties.Street_Address;
                 suggestionsList.innerHTML = '';
                 map.setView(coords, 17);
                 if (currentMarker) map.removeLayer(currentMarker);
-                currentMarker = L.circleMarker(coords, { radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.8 }).addTo(map);
-                const container = document.createElement('div');
-                container.style.textAlign = 'center';
-                container.innerHTML = `<div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
-                    <button id="pop-radius" style="display:block; width:100%; margin-bottom:5px; padding:8px; background:#002f5d; color:white; border:none; border-radius:4px; cursor:pointer;">Enter Mile Radius</button>
-                    <button id="pop-cancel" style="display:block; width:100%; padding:5px; background:none; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Cancel</button>`;
-                currentMarker.bindPopup(container).openPopup();
-                container.querySelector('#pop-radius').onclick = () => {
-                    pendingAddressCoords = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
-                    radiusModal.style.display = 'block';
+                currentMarker = L.circleMarker(coords, { radius: 8, color: 'red', fillColor: '#f03', fillOpacity: 0.8 }).addTo(map);
+                
+                // Request 1: Dynamic Anchor Pop-up (Attached to Map Dot)
+                const popupContent = L.DomUtil.create('div', 'radius-popup-box');
+                popupContent.innerHTML = `
+                    <strong>${f.properties.Street_Address}</strong><br>
+                    Radius (mi): <input type="number" id="mi-in" value="1" step="0.1"><br>
+                    <button id="mi-sub" style="background:var(--dark-blue);color:white;border:none;padding:5px;cursor:pointer;">Enter Mile Radius</button>
+                `;
+                
+                const popup = L.popup({ offset: [0, -10], closeButton: true })
+                    .setLatLng(coords)
+                    .setContent(popupContent)
+                    .openOn(map);
+
+                popupContent.querySelector('#mi-sub').onclick = () => {
+                    const miles = document.getElementById('mi-in').value;
+                    const radiusKm = parseFloat(miles) * 1.60934;
+                    currentShape = turf.circle([f.geometry.coordinates[0], f.geometry.coordinates[1]], radiusKm, { units: 'kilometers' });
+                    drawnItems.clearLayers();
+                    L.geoJSON(currentShape, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                    updateBuildings(currentShape); updateMapLayer(); updateKPIs(); updateViz();
+                    map.closePopup();
                 };
-                container.querySelector('#pop-cancel').onclick = () => map.closePopup();
-                const point = turf.point([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
-                const match = bgData.features.find(bg => turf.booleanPointInPolygon(point, bg));
-                if (match && !currentShape) {
-                    activeBlockGroup = match.properties.GEOIDFQ;
-                    updateMapLayer(); updateKPIs(); updateViz();
-                }
             };
             suggestionsList.appendChild(li);
         });
     });
 
     document.getElementById('category-select').addEventListener('change', (e) => {
-        const ts = document.getElementById('table-select');
-        ts.innerHTML = '<option value="">-- Select --</option>';
+        const ts = document.getElementById('table-select'); ts.innerHTML = '<option value="">-- Select --</option>';
         if (tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
     });
 
@@ -422,19 +374,21 @@ const tableMapping = {
         const cat = document.getElementById('category-select').value;
         if (!e.target.value) return;
         currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${tableMapping[cat].files[e.target.value]}`);
-        const mls = document.getElementById('map-layer-select');
-        mls.innerHTML = '<option value="default">Default Map</option>';
+        const mls = document.getElementById('map-layer-select'); mls.innerHTML = '<option value="default">Default Map</option>';
         Object.keys(currentCSVData[0]).forEach(c => { if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; });
-        updateViz();
+        updateViz(); if (currentShape) updateBuildings(currentShape);
     });
 
-    document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
+    document.getElementById('map-layer-select').addEventListener('change', () => {
+        updateMapLayer();
+        if (currentShape) updateBuildings(currentShape);
+    });
     
+    // File Loading
     const bFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
-    for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features)); }
-
+    for (const f of bFiles) fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features));
     const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
-    for (const f of aFiles) { fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features)); }
+    for (const f of aFiles) fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features));
     
     initKPIs();
 })();
