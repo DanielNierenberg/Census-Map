@@ -296,7 +296,7 @@ const tableMapping = {
         const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
         document.getElementById('count-display').innerText = bResults.length.toLocaleString();
         // Request 5: Building fill color to stand out (Yellow)
-        L.geoJSON(bResults, { style: { color: '#FFFF00', weight: 0.1, fillColor: '#FFFF00', fillOpacity: 0.7 } }).addTo(buildingsLayer);
+        L.geoJSON(bResults, { style: { color: '#FF0000', weight: 1, fillColor: '#FFFF00', fillOpacity: 1 } }).addTo(buildingsLayer);
         updateMapLayer(); updateKPIs(); updateViz();
     });
 
