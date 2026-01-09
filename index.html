@@ -346,60 +346,44 @@ const tableMapping = {
                 
                 currentMarker = L.circleMarker(coords, { radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.8 }).addTo(map);
 
-                // Inline Popup Logic
-                function openMenuPopup() {
-                    const container = document.createElement('div');
-                    container.style.textAlign = 'center';
-                    container.innerHTML = `
-                        <div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
-                        <button id="pop-radius" style="display:block; width:100%; margin-bottom:5px; padding:8px; background:#002f5d; color:white; border:none; border-radius:4px; cursor:pointer;">Enter Mile Radius</button>
-                        <button id="pop-cancel" style="display:block; width:100%; padding:5px; background:none; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Cancel</button>`;
-                    
-                    currentMarker.bindPopup(container).openPopup();
+                // Combined Popup Logic (Input and Buttons in one view)
+                const container = document.createElement('div');
+                container.style.textAlign = 'center';
+                container.innerHTML = `
+                    <div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
+                    <div style="margin-bottom:5px; font-size: 0.9em;">Enter radius in miles:</div>
+                    <input type="number" id="inline-radius" step="0.1" value="1.0" style="width:85%; margin-bottom:10px; padding:5px; border:1px solid #ccc; border-radius: 4px;">
+                    <button id="inline-submit" style="display:block; width:100%; margin-bottom:5px; padding:8px; background:#002f5d; color:white; border:none; border-radius:4px; cursor:pointer; font-weight: bold;">Submit Radius</button>
+                    <button id="pop-cancel" style="display:block; width:100%; padding:5px; background:none; border:1px solid #ccc; border-radius:4px; cursor:pointer; color: #666;">Cancel</button>`;
+                
+                currentMarker.bindPopup(container).openPopup();
 
-                    container.querySelector('#pop-radius').onclick = () => openInputPopup();
-                    container.querySelector('#pop-cancel').onclick = () => map.closePopup();
-                }
+                container.querySelector('#inline-submit').onclick = () => {
+                    const miles = container.querySelector('#inline-radius').value;
+                    if (miles && !isNaN(miles)) {
+                        const radiusKm = parseFloat(miles) * 1.60934;
+                        const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
+                        const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
+                        
+                        drawnItems.clearLayers();
+                        currentShape = circleGeoJSON;
+                        activeBlockGroup = null;
+                        
+                        L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                        
+                        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+                        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+                        buildingsLayer.clearLayers();
+                        L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
+                        
+                        updateMapLayer(); updateKPIs(); updateViz();
+                        map.closePopup();
+                    }
+                };
 
-                function openInputPopup() {
-                    const inputContainer = document.createElement('div');
-                    inputContainer.style.textAlign = 'center';
-                    inputContainer.innerHTML = `
-                        <div style="margin-bottom:5px;"><strong>Radius in miles:</strong></div>
-                        <input type="number" id="inline-radius" step="0.1" value="1.0" style="width:80%; margin-bottom:10px; padding:5px; border:1px solid #ccc;">
-                        <button id="inline-submit" style="display:block; width:100%; margin-bottom:5px; padding:8px; background:#002f5d; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                        <button id="inline-back" style="display:block; width:100%; padding:5px; background:none; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Back</button>`;
+                container.querySelector('#pop-cancel').onclick = () => map.closePopup();
 
-                    currentMarker.setPopupContent(inputContainer);
-
-                    inputContainer.querySelector('#inline-submit').onclick = () => {
-                        const miles = inputContainer.querySelector('#inline-radius').value;
-                        if (miles && !isNaN(miles)) {
-                            const radiusKm = parseFloat(miles) * 1.60934;
-                            const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
-                            const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
-                            
-                            drawnItems.clearLayers();
-                            currentShape = circleGeoJSON;
-                            activeBlockGroup = null;
-                            
-                            L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
-                            
-                            const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
-                            document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-                            buildingsLayer.clearLayers();
-                            L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
-                            
-                            updateMapLayer(); updateKPIs(); updateViz();
-                            map.closePopup();
-                            openMenuPopup(); // Reset for next click
-                        }
-                    };
-                    inputContainer.querySelector('#inline-back').onclick = () => openMenuPopup();
-                }
-
-                openMenuPopup();
-
+                // Highlight Block Group on selection
                 const point = turf.point([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
                 const match = bgData.features.find(bg => turf.booleanPointInPolygon(point, bg));
                 if (match && !currentShape) {
