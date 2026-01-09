@@ -133,7 +133,7 @@ const tableMapping = {
     const legend = L.control({position: 'bottomright'});
     
     let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [];
-    let activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
+    let activeBlockGroup = null, chartInstance = null, currentMarker = null;
     let currentShape = null;
 
     const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
@@ -169,8 +169,7 @@ const tableMapping = {
         bgLayer.eachLayer(layer => {
             const props = layer.feature.properties;
             const geoid = props.GEOIDFQ;
-            const dataSource = (selectedCol === 'default') ? kpiRaw.age : currentCSVData;
-            const row = (dataSource && dataSource.length) ? dataSource.find(r => r.GEO_ID === geoid) : null;
+            const row = (currentCSVData && currentCSVData.length) ? currentCSVData.find(r => r.GEO_ID === geoid) : null;
             
             let displayName = "Unknown";
             if (row && row.NAME) {
@@ -239,59 +238,84 @@ const tableMapping = {
 
     function getBuildingRatio(geoid) {
         const bgFeature = bgData.features.find(f => f.properties.GEOIDFQ === geoid);
-        if (!bgFeature) return 1;
+        if (!bgFeature) return 0;
         const buildingsInBG = allBuildings.filter(b => turf.booleanIntersects(b, bgFeature));
         if (buildingsInBG.length === 0) return 0;
         
         if (currentShape) {
-            const intersection = allBuildings.filter(b => turf.booleanIntersects(b, bgFeature) && turf.booleanIntersects(b, currentShape));
-            return intersection.length / buildingsInBG.length;
+            const buildingsInSelection = buildingsInBG.filter(b => turf.booleanIntersects(b, currentShape));
+            return buildingsInSelection.length / buildingsInBG.length;
+        } else if (activeBlockGroup === geoid) {
+            return 1;
         }
-        return 1;
+        return 0;
     }
 
     function updateKPIs() {
         const ids = getSelectedIDs();
+        // If no selection, we show the sum/avg of ALL block groups
         const activeIds = ids.length ? ids : bgData.features.map(f => f.properties.GEOIDFQ);
-        
-        // Summing Populations and Households with ratio
+        const isClipped = !!(currentShape);
+
         let totalPop = 0;
         let totalHH = 0;
+        let weightedIncSum = 0, weightedIncDenom = 0;
+        let weightedAgeSum = 0, weightedAgeDenom = 0;
+        let weightedHouSum = 0, weightedHouDenom = 0;
+
         activeIds.forEach(id => {
-            const ratio = getBuildingRatio(id);
+            const ratio = isClipped ? getBuildingRatio(id) : 1;
             const popRow = kpiRaw.pop.find(r => r.GEO_ID === id);
             const hhRow = kpiRaw.hh.find(r => r.GEO_ID === id);
-            if (popRow) totalPop += (popRow.Total || 0) * ratio;
-            if (hhRow) totalHH += (hhRow.Total || 0) * ratio;
+            const incRow = kpiRaw.inc.find(r => r.GEO_ID === id);
+            const ageRow = kpiRaw.age.find(r => r.GEO_ID === id);
+            const houRow = kpiRaw.hou.find(r => r.GEO_ID === id);
+
+            const popVal = (popRow?.['Total'] || 0) * ratio;
+            const hhVal = (hhRow?.['Total'] || 0) * ratio;
+
+            totalPop += popVal;
+            totalHH += hhVal;
+
+            // WEIGHTED MEDIAN MATH: (Median * Clipped Weight) / Total Clipped Weight
+            // We use Total Population as the anchor weight for Medians
+            if (incRow && incRow['Median household income (past 12 months)'] > 0) {
+                weightedIncSum += incRow['Median household income (past 12 months)'] * popVal;
+                weightedIncDenom += popVal;
+            }
+            if (ageRow && ageRow['Median Age'] > 0) {
+                weightedAgeSum += ageRow['Median Age'] * popVal;
+                weightedAgeDenom += popVal;
+            }
+            if (houRow && houRow['Median value ($)'] > 0) {
+                weightedHouSum += houRow['Median value ($)'] * popVal;
+                weightedHouDenom += popVal;
+            }
         });
-
-        // Averaging Medians
-        const getAvg = (data, key) => {
-            const rows = data.filter(r => activeIds.includes(r.GEO_ID) && r[key] > 0);
-            return rows.length ? rows.reduce((a, b) => a + b[key], 0) / rows.length : 0;
-        };
-
-        const avgInc = getAvg(kpiRaw.inc, 'Median household income (past 12 months)');
-        const avgHou = getAvg(kpiRaw.hou, 'Median value ($)');
-        const avgAge = getAvg(kpiRaw.age, 'Median Age');
 
         document.getElementById('kpi-pop').innerText = Math.round(totalPop).toLocaleString();
         document.getElementById('kpi-hh').innerText = Math.round(totalHH).toLocaleString();
-        document.getElementById('kpi-income').innerText = avgInc > 0 ? '$' + Math.round(avgInc).toLocaleString() : 'N/A';
-        document.getElementById('kpi-house-val').innerText = avgHou > 0 ? '$' + Math.round(avgHou).toLocaleString() : 'N/A';
-        document.getElementById('kpi-age').innerText = avgAge ? avgAge.toFixed(1) : 'N/A';
+        
+        const finalInc = weightedIncDenom > 0 ? weightedIncSum / weightedIncDenom : 0;
+        const finalAge = weightedAgeDenom > 0 ? weightedAgeSum / weightedAgeDenom : 0;
+        const finalHou = weightedHouDenom > 0 ? weightedHouSum / weightedHouDenom : 0;
+
+        document.getElementById('kpi-income').innerText = finalInc > 0 ? '$' + Math.round(finalInc).toLocaleString() : 'N/A';
+        document.getElementById('kpi-age').innerText = finalAge > 0 ? finalAge.toFixed(1) : 'N/A';
+        document.getElementById('kpi-house-val').innerText = finalHou > 0 ? '$' + Math.round(finalHou).toLocaleString() : 'N/A';
     }
 
     function updateViz() {
         if (!currentCSVData.length) return;
         const ids = getSelectedIDs();
         const activeIds = ids.length ? ids : bgData.features.map(f => f.properties.GEOIDFQ);
+        const isClipped = !!(currentShape);
         const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
         
         const sums = cols.map(col => {
             let colSum = 0;
             activeIds.forEach(id => {
-                const ratio = getBuildingRatio(id);
+                const ratio = isClipped ? getBuildingRatio(id) : 1;
                 const row = currentCSVData.find(r => r.GEO_ID === id);
                 if (row) colSum += (Number(row[col]) || 0) * ratio;
             });
@@ -420,13 +444,6 @@ const tableMapping = {
                     }
                 };
                 container.querySelector('#pop-cancel').onclick = () => map.closePopup();
-
-                const point = turf.point([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
-                const match = bgData.features.find(bg => turf.booleanPointInPolygon(point, bg));
-                if (match && !currentShape) {
-                    activeBlockGroup = match.properties.GEOIDFQ;
-                    updateMapLayer(); updateKPIs(); updateViz();
-                }
             };
             suggestionsList.appendChild(li);
         });
@@ -451,7 +468,7 @@ const tableMapping = {
     document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
     
     const bFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
-    for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => { allBuildings = allBuildings.concat(d.features); if(allBuildings.length > 5000) updateKPIs(); }); }
+    for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => { allBuildings = allBuildings.concat(d.features); updateKPIs(); }); }
 
     const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
     for (const f of aFiles) { fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features)); }
