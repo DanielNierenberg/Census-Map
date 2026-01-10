@@ -138,18 +138,18 @@ const tableDenominatorMap = {
     "Race": "pop",
     "Year Housing Built": "housing",
     "Mobile Homes": "owners",
-    "Housing Unit Value": "owners",
+    "Housing Unit Value": "owners2",
     "Limited English": "hh",
-    "Age and Gender": "pop18",
-    "Family Size": "pop18",
-    "Marriage, Children, and Living alone": "pop18",
+    "Age and Gender": "pop",
+    "Family Size": "hh",
+    "Marriage, Children, and Living alone": "hh",
     "Health Insurance Status": "popNonInst",
     "Education": "pop18",
     "Poverty Status": "pop18",
     "SNAP and Disability Status": "hh",
     "Veterans": "pop18",
     "Means of Transportation": "workers18",
-    "Travel time to work": "workers18",
+    "Travel time to work": "workers18B",
     "Vehicle availability": "occupiedHH"
 };
 
@@ -227,16 +227,19 @@ async function initKPIs() {
     kpiRaw.pop = await loadCSV('Totals/Total Population.csv');                     // Total Population
     kpiRaw.hh = await loadCSV('Totals/Total Households.csv');                      // Total Households
     kpiRaw.hou = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv'); 
-    kpiRaw.owners = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv'); 
+    kpiRaw.owners = await loadCSV('Totals/Total Population in Owner-Occupied Housing Units.csv');          
+    kpiRaw.owners2 = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv');           
     kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv'); 
     kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
 
     // --- ADD MISSING TOTALS REQUIRED FOR TABLES ---
     kpiRaw.pop16 = await loadCSV('Totals/Total Population - 16yrs and over.csv');          // Employment Status
     kpiRaw.pop18 = await loadCSV('Totals/Total Population - 18 yrs and over.csv');         // Education, Poverty, Veterans
-    kpiRaw.popNonInst = await loadCSV('Totals/Total Population - Non Institutionalized.csv');           // Health Insurance
+    kpiRaw.popNonInst = await loadCSV('Totals/Total Population - Non Institutionalized.csv');           // Health Insurance      
     kpiRaw.occupiedHH = await loadCSV('Totals/Total Occupied Housing Units.csv');          // Vehicle Availability
-    kpiRaw.housing = await loadCSV('Totals/Total Housing Units.csv');                      // Year Housing Built, Housing Units
+    kpiRaw.housing = await loadCSV('Totals/Total Housing Units.csv');  
+    kpiRaw.workers18 = await loadCSV('Totals/Total Workers 18 years and over.csv'); 
+    kpiRaw.workers18B = await loadCSV('Totals/Total Non-remote workers 18 years and over.csv');  
 
     updateKPIs();  // initial KPI update
 }
