@@ -75,7 +75,6 @@
                     <option value="Language">Language</option>
                     <option value="Population-related">Population-related</option>
                     <option value="Transportation-related">Transportation-related</option>
-                     <option value="Totals/Median Values">Totals / Median Values</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -467,31 +466,11 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     });
 
     // --- CATEGORY & TABLE SELECTION ---
- document.getElementById('category-select').addEventListener('change', e=>{
-    const cat = e.target.value;
-    const ts = document.getElementById('table-select');
-    const mls = document.getElementById('map-layer-select');
-
-    if(cat === "Totals/Median Values") {
-        // Disable Census Table
-        ts.innerHTML = '<option value="">N/A for Totals/Median Values</option>';
-        ts.disabled = true;
-
-        // Set Map Layer options to the 5 KPIs
-        const kpis = ['Total Population','Total Households','Median Income','Median House Value','Median Age'];
-        mls.innerHTML = '<option value="default">Select KPI</option>';
-        kpis.forEach(k=>mls.innerHTML += `<option value="${k}">${k}</option>`);
-
-        currentCSVData = []; // Clear any previous table data
-        updateViz(); // Will hide table/chart
-    } else {
-        ts.disabled = false;
+    document.getElementById('category-select').addEventListener('change', e=>{
+        const ts = document.getElementById('table-select');
         ts.innerHTML='<option value="">-- Select --</option>';
-        if(tableMapping[cat]) Object.keys(tableMapping[cat].files).forEach(f=>{
-            ts.innerHTML+=`<option value="${f}">${f}</option>`;
-        });
-    }
-});
+        if(tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f=>ts.innerHTML+=`<option value="${f}">${f}</option>`);
+    });
 
     document.getElementById('table-select').addEventListener('change', async e=>{
         const cat = document.getElementById('category-select').value;
@@ -519,69 +498,29 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
 
     initKPIs();
 
-  function updateMapLayer() {
-    const selectedCol = document.getElementById('map-layer-select').value;
-    const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
+    function updateMapLayer() {
+        const selectedCol = document.getElementById('map-layer-select').value;
+        const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
+        const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
 
-    let max = 0;
-
-    // Determine value for shading
-    let getVal = f => 0; // default function
-    if(selectedCol !== 'default') {
-        if(currentCSVData.length) {
-            // Existing table-based KPI
-            max = Math.max(...currentCSVData.map(r => r[selectedCol] || 0));
-            getVal = r => r[selectedCol] || 0;
-        } else if(selectedCol === 'Total Population') {
-            getVal = f => {
-                const row = kpiRaw.pop.find(r=>r.GEO_ID===f.properties.GEOIDFQ);
-                return row?.Total || 0;
-            };
-            max = Math.max(...bgLayer.getLayers().map(l=>getVal(l.feature)));
-        } else if(selectedCol === 'Total Households') {
-            getVal = f => {
-                const row = kpiRaw.hh.find(r=>r.GEO_ID===f.properties.GEOIDFQ);
-                return row?.Total || 0;
-            };
-            max = Math.max(...bgLayer.getLayers().map(l=>getVal(l.feature)));
-        } else if(selectedCol === 'Median Income') {
-            getVal = f => {
-                const row = kpiRaw.inc.find(r=>r.GEO_ID===f.properties.GEOIDFQ);
-                return row?.['Median household income (past 12 months)'] || 0;
-            };
-            max = Math.max(...bgLayer.getLayers().map(l=>getVal(l.feature)));
-        } else if(selectedCol === 'Median House Value') {
-            getVal = f => {
-                const row = kpiRaw.hou.find(r=>r.GEO_ID===f.properties.GEOIDFQ);
-                return row?.['Median value ($)'] || 0;
-            };
-            max = Math.max(...bgLayer.getLayers().map(l=>getVal(l.feature)));
-        } else if(selectedCol === 'Median Age') {
-            getVal = f => {
-                const row = kpiRaw.age.find(r=>r.GEO_ID===f.properties.GEOIDFQ);
-                return row?.['Median Age'] || 0;
-            };
-            max = Math.max(...bgLayer.getLayers().map(l=>getVal(l.feature)));
-        }
+        bgLayer.eachLayer(layer => {
+            const props = layer.feature.properties;
+            const geoid = props.GEOIDFQ;
+            const row = currentCSVData.find(r => r.GEO_ID === geoid);
+            
+            let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
+            if (selectedCol !== 'default') {
+                const val = row?.[selectedCol] || 0;
+                style.fill = true;
+                style.fillColor = '#4a148c'; 
+                style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
+            }
+            if (highlightedIDs.includes(geoid)) {
+                style.color = '#FFFF00'; style.weight = 4; style.opacity = 1;
+            }
+            layer.setStyle(style);
+        });
     }
-
-    bgLayer.eachLayer(layer => {
-        const geoid = layer.feature.properties.GEOIDFQ;
-        let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
-
-        if(selectedCol !== 'default') {
-            const val = getVal(layer.feature);
-            style.fill = true;
-            style.fillColor = '#4a148c'; // purple
-            style.fillOpacity = max ? (val / max) * 0.8 : 0;
-        }
-
-        if(highlightedIDs.includes(geoid)) {
-            style.color = '#FFFF00'; style.weight = 4; style.opacity = 1;
-        }
-        layer.setStyle(style);
-    });
-}
 })();
 </script>
 </body>
