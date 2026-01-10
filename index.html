@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Huntsville ACS 2023 Dashboard</title>
+    <title>Huntsville ACS 2023 Pro Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,7 +15,7 @@
 
         #main-container { display: flex; height: 95%; padding: 10px; box-sizing: border-box; gap: 15px; transition: all 0.3s ease; }
         
-        #map-container { flex: 0 0 33%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: flex 0.3s ease; }
+        #map-container { flex: 0 0 35%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: flex 0.3s ease; }
         #map-container.expanded { flex: 0 0 100%; }
         #map { height: 100%; width: 100%; }
         
@@ -42,7 +42,9 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
         th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
         td { padding: 6px 8px; border-bottom: 1px solid #eee; }
-        .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; }
+        
+        /* Legend Styles */
+        .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
         .info.legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
     </style>
 </head>
@@ -137,13 +139,19 @@ const tableMapping = {
 
     const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
 
+    // --- NEW: Load City Boundary ---
+    try {
+        const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+        L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.05, interactive: false } }).addTo(map);
+    } catch(e) { console.log("City boundary file not found."); }
+
     async function loadCSV(path) {
         const r = await fetch(path);
         const t = await r.text();
         return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
     }
 
-    // Load building counts into a lookup object for fast access
+    // Load building counts for High-Accuracy Weighting
     const countsData = await loadCSV('1-9-26 Hun residential building counts per block group.csv');
     countsData.forEach(row => { buildingCounts[row.GEOIDFQ] = row.building_count; });
 
@@ -155,35 +163,37 @@ const tableMapping = {
         } else if (activeBlockGroup) {
             return [activeBlockGroup];
         }
-        return bgData.features.map(f => f.properties.GEOIDFQ); // No selection = all
+        return []; 
     }
 
-    /**
-     * Logic for getting the "Weight" of a block group selection.
-     * Returns 1.0 if the whole BG is clicked, or (selected_buildings / total_buildings) if drawn.
-     */
     function getBGWeight(geoid) {
         if (activeBlockGroup === geoid) return 1.0; 
-        if (!currentShape) return 1.0; // Default when nothing is selected (summing all)
-
+        if (!currentShape) return 1.0; 
         const totalInBG = buildingCounts[geoid] || 0;
         if (totalInBG === 0) return 0;
-
         const selectedInBG = allBuildings.filter(b => b.properties.GEOIDFQ === geoid && turf.booleanIntersects(b, currentShape)).length;
         return selectedInBG / totalInBG;
     }
 
+    // --- IMPROVED: Map Layer with Tooltips & Dynamic Legend ---
     function updateMapLayer() {
         const selectedCol = document.getElementById('map-layer-select').value;
         const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
-        const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
+        const highlightedIDs = getSelectedIDs();
 
         bgLayer.eachLayer(layer => {
             const props = layer.feature.properties;
             const geoid = props.GEOIDFQ;
             const row = currentCSVData.find(r => r.GEO_ID === geoid);
             
-            let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
+            // Tooltip Logic
+            let tip = `<strong>Block Group:</strong> ${geoid}`;
+            if (selectedCol !== 'default' && row) {
+                tip += `<br>${selectedCol}: ${row[selectedCol]?.toLocaleString() || 0}`;
+            }
+            layer.bindTooltip(tip);
+
+            let style = { ...initialStyle };
             if (selectedCol !== 'default') {
                 const val = row?.[selectedCol] || 0;
                 style.fill = true;
@@ -195,15 +205,29 @@ const tableMapping = {
             }
             layer.setStyle(style);
         });
+
+        // Dynamic Legend
+        legend.remove(map);
+        if (selectedCol !== 'default') {
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'info legend');
+                const grades = [0, max*0.25, max*0.5, max*0.75];
+                div.innerHTML = `<strong>${selectedCol}</strong><br>`;
+                for (let i = 0; i < grades.length; i++) {
+                    div.innerHTML += `<i style="background:#4a148c; opacity:${(grades[i]/max) || 0.1}"></i> ${Math.round(grades[i]).toLocaleString()}+<br>`;
+                }
+                return div;
+            };
+            legend.addTo(map);
+        }
     }
 
     bgLayer = L.geoJSON(bgData, {
         style: initialStyle,
         onEachFeature: (feature, layer) => {
             layer.on('click', () => {
-                const id = feature.properties.GEOIDFQ;
                 drawnItems.clearLayers(); currentShape = null;
-                activeBlockGroup = (activeBlockGroup === id) ? null : id;
+                activeBlockGroup = (activeBlockGroup === feature.properties.GEOIDFQ) ? null : feature.properties.GEOIDFQ;
                 updateMapLayer(); updateKPIs(); updateViz();
             });
         }
@@ -221,53 +245,38 @@ const tableMapping = {
 
     function updateKPIs() {
         const ids = getSelectedIDs();
-        
-        let totalPop = 0;
-        let totalHH = 0;
-        let weightedIncSum = 0, incWeightDenom = 0;
-        let weightedValSum = 0, valWeightDenom = 0;
-        let weightedAgeSum = 0, ageWeightDenom = 0;
+        let totalPop = 0, totalHH = 0, weightedIncSum = 0, incDenom = 0, weightedValSum = 0, valDenom = 0, weightedAgeSum = 0, ageDenom = 0;
 
         ids.forEach(geoid => {
             const weight = getBGWeight(geoid);
-            
-            // Pop & HH (Apportioned Sum)
             const popRow = kpiRaw.pop.find(r => r.GEO_ID === geoid);
             const hhRow = kpiRaw.hh.find(r => r.GEO_ID === geoid);
             const bgPop = (popRow?.Total || 0) * weight;
-            const bgHH = (hhRow?.Total || 0) * weight;
-            
             totalPop += bgPop;
-            totalHH += bgHH;
+            totalHH += (hhRow?.Total || 0) * weight;
 
-            // Median Calculations (Weighted Average by Population * Weight)
             const incRow = kpiRaw.inc.find(r => r.GEO_ID === geoid);
-            const incVal = incRow?.['Median household income (past 12 months)'];
-            if (incVal > 0) {
-                weightedIncSum += incVal * bgPop;
-                incWeightDenom += bgPop;
+            if (incRow?.['Median household income (past 12 months)'] > 0) {
+                weightedIncSum += incRow['Median household income (past 12 months)'] * bgPop;
+                incDenom += bgPop;
             }
-
             const houRow = kpiRaw.hou.find(r => r.GEO_ID === geoid);
-            const houVal = houRow?.['Median value ($)'];
-            if (houVal > 0) {
-                weightedValSum += houVal * bgPop;
-                valWeightDenom += bgPop;
+            if (houRow?.['Median value ($)'] > 0) {
+                weightedValSum += houRow['Median value ($)'] * bgPop;
+                valDenom += bgPop;
             }
-
             const ageRow = kpiRaw.age.find(r => r.GEO_ID === geoid);
-            const ageVal = ageRow?.['Median Age'];
-            if (ageVal > 0) {
-                weightedAgeSum += ageVal * bgPop;
-                ageWeightDenom += bgPop;
+            if (ageRow?.['Median Age'] > 0) {
+                weightedAgeSum += ageRow['Median Age'] * bgPop;
+                ageDenom += bgPop;
             }
         });
 
         document.getElementById('kpi-pop').innerText = Math.round(totalPop).toLocaleString();
         document.getElementById('kpi-hh').innerText = Math.round(totalHH).toLocaleString();
-        document.getElementById('kpi-income').innerText = incWeightDenom ? '$' + Math.round(weightedIncSum / incWeightDenom).toLocaleString() : 'N/A';
-        document.getElementById('kpi-house-val').innerText = valWeightDenom ? '$' + Math.round(weightedValSum / valWeightDenom).toLocaleString() : 'N/A';
-        document.getElementById('kpi-age').innerText = ageWeightDenom ? (weightedAgeSum / ageWeightDenom).toFixed(1) : 'N/A';
+        document.getElementById('kpi-income').innerText = incDenom ? '$' + Math.round(weightedIncSum / incDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-house-val').innerText = valDenom ? '$' + Math.round(weightedValSum / valDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-age').innerText = ageDenom ? (weightedAgeSum / ageDenom).toFixed(1) : 'N/A';
     }
 
     function updateViz() {
@@ -279,15 +288,12 @@ const tableMapping = {
             let total = 0;
             ids.forEach(geoid => {
                 const row = currentCSVData.find(r => r.GEO_ID === geoid);
-                if (row) {
-                    total += (Number(row[c]) || 0) * getBGWeight(geoid);
-                }
+                if (row) total += (Number(row[c]) || 0) * getBGWeight(geoid);
             });
             return { param: c, val: Math.round(total) };
         }).sort((a, b) => b.val - a.val);
 
         document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
-        
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(document.getElementById('barChart'), {
             type: 'bar', data: { labels: sums.map(s => s.param), datasets: [{ label: 'Apportioned Count', data: sums.map(s => s.val), backgroundColor: '#002f5d' }] },
@@ -295,25 +301,24 @@ const tableMapping = {
         });
     }
 
-    // --- DRAWING HANDLERS ---
+    // --- DRAWING & BUTTONS ---
     const drawControl = new L.Control.Draw({ draw: { polyline: false, marker: false, circlemarker: false, polygon: true, rectangle: true, circle: true }, edit: false });
     map.addControl(drawControl);
 
     map.on('draw:created', e => {
-        drawnItems.clearLayers(); 
-        drawnItems.addLayer(e.layer);
+        drawnItems.clearLayers(); drawnItems.addLayer(e.layer);
         activeBlockGroup = null;
         currentShape = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius() / 1000, { units: 'kilometers' }) : e.layer.toGeoJSON();
         
-        buildingsLayer.clearLayers();
         const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
         document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+        buildingsLayer.clearLayers();
         L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
         
         updateMapLayer(); updateKPIs(); updateViz();
     });
 
-    // --- BUTTON CONTROLS ---
+    // Reset Button
     const clearBtn = L.control({position: 'topright'});
     clearBtn.onAdd = () => {
         const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -321,6 +326,7 @@ const tableMapping = {
         div.onclick = (e) => { 
             e.preventDefault(); 
             buildingsLayer.clearLayers(); drawnItems.clearLayers();
+            if (currentMarker) map.removeLayer(currentMarker);
             currentShape = null; activeBlockGroup = null; 
             document.getElementById('count-display').innerText = "0";
             updateMapLayer(); updateKPIs(); updateViz();
@@ -329,6 +335,17 @@ const tableMapping = {
     };
     clearBtn.addTo(map);
 
+    // Home Button
+    const homeBtn = L.control({position: 'topright'});
+    homeBtn.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Home" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🏠</a>';
+        div.onclick = (e) => { e.preventDefault(); map.setView([34.7304, -86.5861], 12); };
+        return div;
+    };
+    homeBtn.addTo(map);
+
+    // Expand Map Button
     const expandBtn = L.control({position: 'topright'});
     expandBtn.onAdd = () => {
         const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -343,7 +360,7 @@ const tableMapping = {
     };
     expandBtn.addTo(map);
 
-    // --- SEARCH & ADDRESSES ---
+    // --- SEARCH & RADIUS LOGIC ---
     const searchInput = document.getElementById('address-search');
     const suggestionsList = document.getElementById('suggestions');
 
@@ -356,17 +373,45 @@ const tableMapping = {
             const li = document.createElement('li');
             li.textContent = f.properties.Street_Address;
             li.onclick = () => {
+                const addressText = f.properties.Street_Address;
+                searchInput.value = addressText;
                 const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-                searchInput.value = f.properties.Street_Address;
                 suggestionsList.innerHTML = '';
-                map.setView(coords, 17);
+                map.setView(coords, 16);
                 if (currentMarker) map.removeLayer(currentMarker);
-                currentMarker = L.circleMarker(coords, { radius: 10, color: 'red' }).addTo(map);
+                currentMarker = L.circleMarker(coords, { radius: 8, color: 'red', fillOpacity: 0.8 }).addTo(map);
+
+                const container = document.createElement('div');
+                container.innerHTML = `
+                    <div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
+                    Radius (miles): <input type="number" id="rad-val" step="0.1" value="1.0" style="width:50px;">
+                    <button id="rad-submit" style="background:var(--dark-blue); color:white; border:none; padding:5px; border-radius:3px; cursor:pointer;">Go</button>`;
+                
+                currentMarker.bindPopup(container).openPopup();
+
+                container.querySelector('#rad-submit').onclick = () => {
+                    const miles = container.querySelector('#rad-val').value;
+                    const radiusKm = parseFloat(miles) * 1.60934;
+                    const circleGeoJSON = turf.circle([f.geometry.coordinates[0], f.geometry.coordinates[1]], radiusKm, { units: 'kilometers' });
+                    
+                    drawnItems.clearLayers();
+                    currentShape = circleGeoJSON;
+                    L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
+                    
+                    const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+                    document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+                    buildingsLayer.clearLayers();
+                    L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
+
+                    updateMapLayer(); updateKPIs(); updateViz();
+                    map.closePopup();
+                };
             };
             suggestionsList.appendChild(li);
         });
     });
 
+    // --- CATEGORY HANDLERS ---
     document.getElementById('category-select').addEventListener('change', (e) => {
         const ts = document.getElementById('table-select');
         ts.innerHTML = '<option value="">-- Select --</option>';
@@ -380,18 +425,13 @@ const tableMapping = {
         const mls = document.getElementById('map-layer-select');
         mls.innerHTML = '<option value="default">Default Map</option>';
         Object.keys(currentCSVData[0]).forEach(c => { if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML += `<option value="${c}">${c}</option>`; });
-        updateViz();
+        updateViz(); updateMapLayer();
     });
 
     document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
     
-    // Load updated building GeoJSONs
-    const bFiles = [
-        '1-9-26 Hun residential buildings with geoid p1.geojson',
-        '1-9-26 Hun residential buildings with geoid p2.geojson',
-        '1-9-26 Hun residential buildings with geoid p3.geojson',
-        '1-9-26 Hun residential buildings with geoid p4.geojson'
-    ];
+    // Load Files
+    const bFiles = ['1-9-26 Hun residential buildings with geoid p1.geojson', '1-9-26 Hun residential buildings with geoid p2.geojson', '1-9-26 Hun residential buildings with geoid p3.geojson', '1-9-26 Hun residential buildings with geoid p4.geojson'];
     for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features)); }
 
     const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
