@@ -306,15 +306,15 @@ function updateViz() {
     if (!currentCSVData.length) return;
 
     const ids = getSelectedIDs(); // selected GEOIDs
-
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
-    if (!denomKey) { console.warn(`No denominator key for table "${selectedTable}"`); return; }
+    if (!denomKey) {
+        console.warn(`No denominator key for table "${selectedTable}"`);
+        return;
+    }
 
-    // columns to display (skip GEO_ID, NAME, *_MOE)
     const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
 
-    // --- Compute weighted totals for each column ---
     const sums = cols.map(col => {
         let totalVal = 0;
         let totalDenom = 0;
@@ -326,11 +326,14 @@ function updateViz() {
             if (!row || !denomRow) return; // skip missing data
 
             const weight = getBGWeight(geoid);
-            const val = Number(row[col]) || 0;
-            const denom = Number(denomRow.Total) || 0;
+            const val = Number(row[col] ?? 0);
+            const denom = Number(denomRow.Total ?? 0);
 
-            totalVal += val * weight;
-            totalDenom += denom * weight;
+            // Only add weighted values if denominator > 0
+            if (denom > 0) {
+                totalVal += val * weight;
+                totalDenom += denom * weight;
+            }
         });
 
         const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
