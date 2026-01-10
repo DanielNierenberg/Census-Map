@@ -315,6 +315,25 @@ function updateViz() {
         console.warn(`No denominator key for table "${selectedTable}"`);
         return;
     }
+    
+    // --- Set dynamic column title ---
+const denomNameMap = {
+    hh: "Households",
+    pop: "Population",
+    pop16: "Population 16+",
+    pop18: "Population 18+",
+    popNonInst: "Non-Institutionalized Population",
+    housing: "Housing Units",
+    owners: "Population in Owner-Occupied Units",
+    owners2: "Owner-Occupied Units",
+    workers18: "Workers 18+",
+    workers18B: "Workers 18+ (non-remote)",
+    occupiedHH: "Occupied Housing Units"
+};
+
+const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
+tableHeaderPct.innerText = `% of Total ${denomNameMap[denomKey] || denomKey}`;
+
 
     const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
 
