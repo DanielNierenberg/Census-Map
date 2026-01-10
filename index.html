@@ -229,15 +229,24 @@ const tableDenominatorMap = {
     }).addTo(map);
 
     let kpiRaw = {};
-    async function initKPIs() {
-        kpiRaw.pop = await loadCSV('Totals/Total Population.csv');
-        kpiRaw.hh = await loadCSV('Totals/Total Households.csv');
-        kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
-        kpiRaw.hou = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv');
-        kpiRaw.owners = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv');
-        kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
-        updateKPIs();
-    }
+async function initKPIs() {
+    // Main KPIs
+    kpiRaw.pop    = await loadCSV('Totals/Total Population.csv');
+    kpiRaw.hh     = await loadCSV('Totals/Total Households.csv');
+    kpiRaw.inc    = await loadCSV('Employment/Median Household Income (DONE).csv');
+    kpiRaw.hou    = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv');
+    kpiRaw.owners = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv');
+    kpiRaw.age    = await loadCSV('Population-related/Median Age (DONE).csv');
+
+    // Additional totals for % calculations
+    kpiRaw.pop16       = await loadCSV('Totals/Total Population - 16yrs and over.csv');
+    kpiRaw.pop18       = await loadCSV('Totals/Total Population - 18 yrs and over.csv');
+    kpiRaw.popNonInst  = await loadCSV('Totals/Total Population - Non Institutionalized.csv');
+    kpiRaw.workers18   = await loadCSV('Totals/Total Workers 18 years and over.csv');
+    kpiRaw.occupiedHH  = await loadCSV('Totals/Total Occupied Housing Units.csv');
+    
+    updateKPIs();
+}
 
     function updateKPIs() {
         const ids = getSelectedIDs();
@@ -307,7 +316,6 @@ function updateViz() {
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
 
-    // Build sums and % total
     const sums = cols.map(c => {
         let totalVal = 0, totalDenom = 0;
         ids.forEach(geoid => {
@@ -317,10 +325,15 @@ function updateViz() {
             const val = Number(row[c]) || 0;
             totalVal += val * weight;
 
-            // Get denominator for this geoid
-            const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
-            const denomVal = denomRow?.Total || 0;
-            totalDenom += denomVal * weight;
+            // Use loaded totals if available
+            if (denomKey && kpiRaw[denomKey]) {
+                const denomRow = kpiRaw[denomKey].find(r => r.GEO_ID === geoid);
+                const denomVal = denomRow?.Total || 0;
+                totalDenom += denomVal * weight;
+            } else {
+                // fallback: sum column values for % of total
+                totalDenom += val * weight;
+            }
         });
         const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
         return { param: c, val: Math.round(totalVal), pct: pct.toFixed(1) };
@@ -331,7 +344,7 @@ function updateViz() {
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
 
-    // --- Update Bar Chart with tooltip ---
+    // --- Update Bar Chart ---
     if(chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('barChart'), {
         type: 'bar',
@@ -359,6 +372,7 @@ function updateViz() {
         }
     });
 }
+
 
 
     // --- DRAWING HANDLERS ---
