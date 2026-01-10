@@ -230,22 +230,22 @@ const tableDenominatorMap = {
 
     let kpiRaw = {};
 async function initKPIs() {
-    // Main KPIs
-    kpiRaw.pop    = await loadCSV('Totals/Total Population.csv');
-    kpiRaw.hh     = await loadCSV('Totals/Total Households.csv');
-    kpiRaw.inc    = await loadCSV('Employment/Median Household Income (DONE).csv');
-    kpiRaw.hou    = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv');
-    kpiRaw.owners = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv');
-    kpiRaw.age    = await loadCSV('Population-related/Median Age (DONE).csv');
+    // Population & households
+    kpiRaw.pop = await loadCSV('Totals/Total Population.csv');                     // Total Population
+    kpiRaw.hh = await loadCSV('Totals/Total Households.csv');                      // Total Households
+    kpiRaw.hou = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv'); 
+    kpiRaw.owners = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv'); 
+    kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv'); 
+    kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
 
-    // Additional totals for % calculations
-    kpiRaw.pop16       = await loadCSV('Totals/Total Population - 16yrs and over.csv');
-    kpiRaw.pop18       = await loadCSV('Totals/Total Population - 18 yrs and over.csv');
-    kpiRaw.popNonInst  = await loadCSV('Totals/Total Population - Non Institutionalized.csv');
-    kpiRaw.workers18   = await loadCSV('Totals/Total Workers 18 years and over.csv');
-    kpiRaw.occupiedHH  = await loadCSV('Totals/Total Occupied Housing Units.csv');
-    
-    updateKPIs();
+    // --- ADD MISSING TOTALS REQUIRED FOR TABLES ---
+    kpiRaw.pop16 = await loadCSV('Totals/Total Population - 16yrs and over.csv');          // Employment Status
+    kpiRaw.pop18 = await loadCSV('Totals/Total Population - 18 yrs and over.csv');         // Education, Poverty, Veterans
+    kpiRaw.popNonInst = await loadCSV('Totals/Total Non-institutionalized.csv');           // Health Insurance
+    kpiRaw.occupiedHH = await loadCSV('Totals/Total Occupied Housing Units.csv');          // Vehicle Availability
+    kpiRaw.housing = await loadCSV('Totals/Total Housing Units.csv');                      // Year Housing Built, Housing Units
+
+    updateKPIs();  // initial KPI update
 }
 
     function updateKPIs() {
@@ -308,6 +308,7 @@ async function initKPIs() {
         document.getElementById('kpi-age').innerText = ageWeightDenom ? (weightedAgeSum / ageWeightDenom).toFixed(1) : 'N/A';
     }
 
+// --- UPDATE TABLE + BAR CHART ---
 function updateViz() {
     if (!currentCSVData.length) return;
 
@@ -354,7 +355,7 @@ function updateViz() {
         return { param: c, val: Math.round(totalVal), pct: pct.toFixed(1) };
     }).sort((a, b) => b.val - a.val);
 
-    // --- Update Table ---
+    // --- Update HTML table ---
     document.querySelector('#data-table tbody').innerHTML = sums.map(s =>
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
