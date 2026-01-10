@@ -310,55 +310,70 @@ async function initKPIs() {
 
 function updateViz() {
     if (!currentCSVData.length) return;
+
     const ids = getSelectedIDs();
-    const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
-    
+    const cols = Object.keys(currentCSVData[0])
+        .filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
+
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
 
+    if (!denomKey) {
+        console.warn(`No denominator key for table "${selectedTable}"`);
+        return;
+    }
+
+    // --- Compute total denominator across all selected GEOIDs ---
+    let totalDenom = 0;
+    ids.forEach(geoid => {
+        const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
+        if (!denomRow) {
+            console.warn(`Missing denominator for GEOID ${geoid} in ${denomKey}`);
+            return;
+        }
+        const weight = getBGWeight(geoid);
+        totalDenom += (denomRow.Total || 0) * weight;
+    });
+
+    if (totalDenom === 0) {
+        console.warn(`Total denominator is 0 for table "${selectedTable}"`);
+    }
+
+    // --- Compute weighted totals per column ---
     const sums = cols.map(c => {
-        let totalVal = 0, totalDenom = 0;
+        let totalVal = 0;
         ids.forEach(geoid => {
             const row = currentCSVData.find(r => r.GEO_ID === geoid);
             if (!row) return;
             const weight = getBGWeight(geoid);
             const val = Number(row[c]) || 0;
             totalVal += val * weight;
-
-            // Use loaded totals if available
-            if (denomKey && kpiRaw[denomKey]) {
-                const denomRow = kpiRaw[denomKey].find(r => r.GEO_ID === geoid);
-                const denomVal = denomRow?.Total || 0;
-                totalDenom += denomVal * weight;
-            } else {
-                // fallback: sum column values for % of total
-                totalDenom += val * weight;
-            }
         });
+
         const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
         return { param: c, val: Math.round(totalVal), pct: pct.toFixed(1) };
-    }).sort((a,b)=>b.val-a.val);
+    }).sort((a, b) => b.val - a.val);
 
     // --- Update Table ---
-    document.querySelector('#data-table tbody').innerHTML = sums.map(s => 
+    document.querySelector('#data-table tbody').innerHTML = sums.map(s =>
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
 
     // --- Update Bar Chart ---
-    if(chartInstance) chartInstance.destroy();
+    if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
-            labels: sums.map(s=>s.param),
+            labels: sums.map(s => s.param),
             datasets: [{
                 label: 'Apportioned Count',
-                data: sums.map(s=>s.val),
-                backgroundColor:'#002f5d'
+                data: sums.map(s => s.val),
+                backgroundColor: '#002f5d'
             }]
         },
         options: {
-            indexAxis:'y',
-            maintainAspectRatio:false,
+            indexAxis: 'y',
+            maintainAspectRatio: false,
             plugins: {
                 tooltip: {
                     callbacks: {
@@ -372,7 +387,6 @@ function updateViz() {
         }
     });
 }
-
 
 
     // --- DRAWING HANDLERS ---
