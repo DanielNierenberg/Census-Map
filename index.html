@@ -312,51 +312,41 @@ async function initKPIs() {
 function updateViz() {
     if (!currentCSVData.length) return;
 
-    const ids = getSelectedIDs();
-    const cols = Object.keys(currentCSVData[0])
-        .filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
+    const ids = getSelectedIDs(); // selected GEOIDs
 
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
+    if (!denomKey) { console.warn(`No denominator key for table "${selectedTable}"`); return; }
 
-    if (!denomKey) {
-        console.warn(`No denominator key for table "${selectedTable}"`);
-        return;
-    }
+    // columns to display (skip GEO_ID, NAME, *_MOE)
+    const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
 
-    // --- Compute total denominator across all selected GEOIDs ---
-    let totalDenom = 0;
-    ids.forEach(geoid => {
-        const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
-        if (!denomRow) {
-            console.warn(`Missing denominator for GEOID ${geoid} in ${denomKey}`);
-            return;
-        }
-        const weight = getBGWeight(geoid);
-        totalDenom += (denomRow.Total || 0) * weight;
-    });
-
-    if (totalDenom === 0) {
-        console.warn(`Total denominator is 0 for table "${selectedTable}"`);
-    }
-
-    // --- Compute weighted totals per column ---
-    const sums = cols.map(c => {
+    // --- Compute weighted totals for each column ---
+    const sums = cols.map(col => {
         let totalVal = 0;
+        let totalDenom = 0;
+
         ids.forEach(geoid => {
             const row = currentCSVData.find(r => r.GEO_ID === geoid);
-            if (!row) return;
+            const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
+
+            if (!row || !denomRow) return; // skip missing data
+
             const weight = getBGWeight(geoid);
-            const val = Number(row[c]) || 0;
+            const val = Number(row[col]) || 0;
+            const denom = Number(denomRow.Total) || 0;
+
             totalVal += val * weight;
+            totalDenom += denom * weight;
         });
 
         const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
-        return { param: c, val: Math.round(totalVal), pct: pct.toFixed(1) };
-    }).sort((a, b) => b.val - a.val);
+        return { param: col, val: Math.round(totalVal), pct: pct.toFixed(1) };
+    }).sort((a,b) => b.val - a.val);
 
     // --- Update HTML table ---
-    document.querySelector('#data-table tbody').innerHTML = sums.map(s =>
+    const tbody = document.querySelector('#data-table tbody');
+    tbody.innerHTML = sums.map(s => 
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
 
@@ -378,9 +368,9 @@ function updateViz() {
             plugins: {
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            const pct = sums[context.dataIndex].pct;
-                            return `${context.dataset.label}: ${context.raw.toLocaleString()} (${pct}%)`;
+                        label: ctx => {
+                            const pct = sums[ctx.dataIndex].pct;
+                            return `${ctx.dataset.label}: ${ctx.raw.toLocaleString()} (${pct}%)`;
                         }
                     }
                 }
@@ -388,6 +378,7 @@ function updateViz() {
         }
     });
 }
+
 
 
     // --- DRAWING HANDLERS ---
