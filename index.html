@@ -98,7 +98,13 @@
         <div class="viz-row">
             <div class="table-container">
                 <table id="data-table">
-                    <thead><tr><th>Census Parameter</th><th>Count</th></tr></thead>
+                    <thead>
+  <tr>
+    <th>Census Parameter</th>
+    <th>Count (% of total)</th>
+  </tr>
+</thead>
+
                     <tbody></tbody>
                 </table>
             </div>
@@ -123,6 +129,37 @@ const tableMapping = {
     'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Education': 'Population by Education (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veterans': 'Veteran Status (DONE).csv'} },
     'Transportation-related': { folder: 'Transportation-related', files: {'Means of Transportation': 'Means of Transportation to work (DONE).csv', 'Travel time to work': 'Travel Time to Work (DONE).csv', 'Vehicle availability': 'Vehicle Availability - Households (DONE).csv'} }
 };
+
+// Map table names to denominator keys in your Totals CSVs
+const tableDenominatorMap = {
+    "Total Population": "pop",
+    "Sex by Age": "pop",
+    "Race": "pop",
+    "Means of Transportation": "workers18",
+    "Travel time to work": "workers18",
+    "Household Type (Including Living Alone)": "hh",
+    "Households by Type": "hh",
+    "Household Type by Household Size": "hh",
+    "Housing Units": "housing",
+    "Year Housing Built": "housing",
+    "Median Housing Unit Value": "owners",
+    "Type of Computers in Household": "hh",
+    "Presence and Types of Internet Subscriptions": "hh",
+    "Population by Age": "pop18",
+    "Population by Education": "pop18",
+    "Population by Poverty Status": "pop18",
+    "Veterans": "pop18",
+    "SNAP and Disability": "hh",
+    "Median Age": "pop",
+    "Household Income": "hh",
+    "Median Household Income": "hh",
+    "Mobile Homes": "owners",
+    "Employment Status": "pop16",
+    "Housing Unit Value": "owners",
+    "No Vehicle Available": "occupiedHH",
+    "No Health Insurance": "popNonInst"
+};
+
 
 (async function() {
     const map = L.map('map', { renderer: L.canvas() }).setView([34.7304, -86.5861], 12);
@@ -262,29 +299,67 @@ const tableMapping = {
         document.getElementById('kpi-age').innerText = ageWeightDenom ? (weightedAgeSum / ageWeightDenom).toFixed(1) : 'N/A';
     }
 
-    function updateViz() {
-        if (!currentCSVData.length) return;
-        const ids = getSelectedIDs();
-        const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
-        
-        const sums = cols.map(c => {
-            let total = 0;
-            ids.forEach(geoid => {
-                const row = currentCSVData.find(r => r.GEO_ID === geoid);
-                if (row) total += (Number(row[c]) || 0) * getBGWeight(geoid);
-            });
-            return { param: c, val: Math.round(total) };
-        }).sort((a,b)=>b.val-a.val);
+function updateViz() {
+    if (!currentCSVData.length) return;
+    const ids = getSelectedIDs();
+    const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
+    
+    const selectedTable = document.getElementById('table-select').value;
+    const denomKey = tableDenominatorMap[selectedTable];
 
-        document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
+    // Build sums and % total
+    const sums = cols.map(c => {
+        let totalVal = 0, totalDenom = 0;
+        ids.forEach(geoid => {
+            const row = currentCSVData.find(r => r.GEO_ID === geoid);
+            if (!row) return;
+            const weight = getBGWeight(geoid);
+            const val = Number(row[c]) || 0;
+            totalVal += val * weight;
 
-        if(chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(document.getElementById('barChart'), {
-            type: 'bar',
-            data: { labels: sums.map(s=>s.param), datasets:[{label:'Apportioned Count', data:sums.map(s=>s.val), backgroundColor:'#002f5d'}] },
-            options: { indexAxis:'y', maintainAspectRatio:false }
+            // Get denominator for this geoid
+            const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
+            const denomVal = denomRow?.Total || 0;
+            totalDenom += denomVal * weight;
         });
-    }
+        const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
+        return { param: c, val: Math.round(totalVal), pct: pct.toFixed(1) };
+    }).sort((a,b)=>b.val-a.val);
+
+    // --- Update Table ---
+    document.querySelector('#data-table tbody').innerHTML = sums.map(s => 
+        `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
+    ).join('');
+
+    // --- Update Bar Chart with tooltip ---
+    if(chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: sums.map(s=>s.param),
+            datasets: [{
+                label: 'Apportioned Count',
+                data: sums.map(s=>s.val),
+                backgroundColor:'#002f5d'
+            }]
+        },
+        options: {
+            indexAxis:'y',
+            maintainAspectRatio:false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const pct = sums[context.dataIndex].pct;
+                            return `${context.dataset.label}: ${context.raw.toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 
     // --- DRAWING HANDLERS ---
     const drawControl = new L.Control.Draw({ draw: { polyline:false, marker:false, circlemarker:false, polygon:true, rectangle:true, circle:true }, edit:false });
