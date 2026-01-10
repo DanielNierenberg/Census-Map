@@ -234,7 +234,7 @@ async function initKPIs() {
     // --- ADD MISSING TOTALS REQUIRED FOR TABLES ---
     kpiRaw.pop16 = await loadCSV('Totals/Total Population - 16yrs and over.csv');          // Employment Status
     kpiRaw.pop18 = await loadCSV('Totals/Total Population - 18 yrs and over.csv');         // Education, Poverty, Veterans
-    kpiRaw.popNonInst = await loadCSV('Totals/Total Non-institutionalized.csv');           // Health Insurance
+    kpiRaw.popNonInst = await loadCSV('Totals/Total Population - Non Institutionalized.csv');           // Health Insurance
     kpiRaw.occupiedHH = await loadCSV('Totals/Total Occupied Housing Units.csv');          // Vehicle Availability
     kpiRaw.housing = await loadCSV('Totals/Total Housing Units.csv');                      // Year Housing Built, Housing Units
 
