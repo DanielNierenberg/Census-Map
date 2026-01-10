@@ -331,8 +331,13 @@ const denomNameMap = {
     occupiedHH: "Occupied Housing Units"
 };
 
+// First column
+const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
+tableHeaderParam.innerText = selectedTable || "Census Parameter";
+
+// Second column
 const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
-tableHeaderPct.innerText = `% of Total ${denomNameMap[denomKey] || denomKey}`;
+tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
 
 
     const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
