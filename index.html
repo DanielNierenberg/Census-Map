@@ -132,16 +132,10 @@ const tableMapping = {
     const drawnItems = new L.FeatureGroup().addTo(map);
     const legend = L.control({position: 'bottomright'});
     
-    let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [];
-    let activeBlockGroup = null, chartInstance = null, currentMarker = null, selectedCoords = null;
-    let currentShape = null;
+    let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [], buildingCounts = {};
+    let activeBlockGroup = null, chartInstance = null, currentMarker = null, currentShape = null;
 
     const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
-
-    try {
-        const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
-        L.geoJSON(cityData, { style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } }).addTo(map);
-    } catch(e) {}
 
     async function loadCSV(path) {
         const r = await fetch(path);
@@ -149,16 +143,29 @@ const tableMapping = {
         return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
     }
 
+    // Logic from Code 2: Load Building Counts
+    const countsData = await loadCSV('1-9-26 Hun residential building counts per block group.csv').catch(()=>[]);
+    countsData.forEach(row => { buildingCounts[row.GEOIDFQ] = row.building_count; });
+
     const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
 
     function getSelectedIDs() {
-        let ids = [];
         if (currentShape) {
-            ids = bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
+            return bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
         } else if (activeBlockGroup) {
-            ids = [activeBlockGroup];
+            return [activeBlockGroup];
         }
-        return ids;
+        return [];
+    }
+
+    // Logic from Code 2: Weighting Calculation
+    function getBGWeight(geoid) {
+        if (activeBlockGroup === geoid) return 1.0; 
+        if (!currentShape) return 1.0; 
+        const totalInBG = buildingCounts[geoid] || 0;
+        if (totalInBG === 0) return 0;
+        const selectedInBG = allBuildings.filter(b => b.properties.GEOIDFQ === geoid && turf.booleanIntersects(b, currentShape)).length;
+        return selectedInBG / totalInBG;
     }
 
     function updateMapLayer() {
@@ -169,8 +176,7 @@ const tableMapping = {
         bgLayer.eachLayer(layer => {
             const props = layer.feature.properties;
             const geoid = props.GEOIDFQ;
-            const dataSource = (selectedCol === 'default') ? kpiRaw.age : currentCSVData;
-            const row = (dataSource && dataSource.length) ? dataSource.find(r => r.GEO_ID === geoid) : null;
+            const row = (currentCSVData && currentCSVData.length) ? currentCSVData.find(r => r.GEO_ID === geoid) : null;
             
             let displayName = "Unknown";
             if (row && row.NAME) {
@@ -228,9 +234,10 @@ const tableMapping = {
 
     let kpiRaw = {};
     async function initKPIs() {
-        kpiRaw.pop = await loadCSV('Totals/Total Households.csv');
+        kpiRaw.pop = await loadCSV('Totals/Total Population.csv');
+        kpiRaw.hh = await loadCSV('Totals/Total Households.csv');
         kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
-        kpiRaw.hou = await loadCSV('Housing-related/Owner-Occupied Housing Unit Value (DONE).csv');
+        kpiRaw.hou = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv');
         kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv');
         updateKPIs();
         updateMapLayer();
@@ -238,29 +245,64 @@ const tableMapping = {
 
     function updateKPIs() {
         const ids = getSelectedIDs();
-        const filter = (data) => ids.length ? data.filter(r => ids.includes(r.GEO_ID)) : data;
-        const p = filter(kpiRaw.pop).reduce((a, b) => a + (b.Total || 0), 0);
-        const avg = (data, key) => {
-            const vals = filter(data).map(r => r[key]).filter(v => v > 0);
-            return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
-        };
-        document.getElementById('kpi-pop').innerText = p.toLocaleString();
-        document.getElementById('kpi-hh').innerText = p.toLocaleString();
-        document.getElementById('kpi-income').innerText = avg(kpiRaw.inc, 'Median household income (past 12 months)') > 0 ? '$' + Math.round(avg(kpiRaw.inc, 'Median household income (past 12 months)')).toLocaleString() : 'N/A';
-        document.getElementById('kpi-house-val').innerText = avg(kpiRaw.hou, 'Median value ($)') > 0 ? '$' + Math.round(avg(kpiRaw.hou, 'Median value ($)')).toLocaleString() : 'N/A';
-        document.getElementById('kpi-age').innerText = avg(kpiRaw.age, 'Median Age') ? avg(kpiRaw.age, 'Median Age').toFixed(1) : 'N/A';
+        if (ids.length === 0) {
+            ['kpi-pop', 'kpi-hh', 'kpi-income', 'kpi-house-val', 'kpi-age'].forEach(id => document.getElementById(id).innerText = '0');
+            return;
+        }
+
+        let totalPop = 0, totalHH = 0;
+        let weightedIncSum = 0, incWeightDenom = 0;
+        let weightedValSum = 0, valWeightDenom = 0;
+        let weightedAgeSum = 0, ageWeightDenom = 0;
+
+        ids.forEach(geoid => {
+            const weight = getBGWeight(geoid);
+            const popRow = kpiRaw.pop.find(r => r.GEO_ID === geoid);
+            const hhRow = kpiRaw.hh.find(r => r.GEO_ID === geoid);
+            const bgPop = (popRow?.Total || 0) * weight;
+            const bgHH = (hhRow?.Total || 0) * weight;
+            
+            totalPop += bgPop;
+            totalHH += bgHH;
+
+            const incRow = kpiRaw.inc.find(r => r.GEO_ID === geoid);
+            const incVal = incRow?.['Median household income (past 12 months)'];
+            if (incVal > 0) { weightedIncSum += incVal * bgPop; incWeightDenom += bgPop; }
+
+            const houRow = kpiRaw.hou.find(r => r.GEO_ID === geoid);
+            const houVal = houRow?.['Median value ($)'];
+            if (houVal > 0) { weightedValSum += houVal * bgPop; valWeightDenom += bgPop; }
+
+            const ageRow = kpiRaw.age.find(r => r.GEO_ID === geoid);
+            const ageVal = ageRow?.['Median Age'];
+            if (ageVal > 0) { weightedAgeSum += ageVal * bgPop; ageWeightDenom += bgPop; }
+        });
+
+        document.getElementById('kpi-pop').innerText = Math.round(totalPop).toLocaleString();
+        document.getElementById('kpi-hh').innerText = Math.round(totalHH).toLocaleString();
+        document.getElementById('kpi-income').innerText = incWeightDenom ? '$' + Math.round(weightedIncSum / incWeightDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-house-val').innerText = valWeightDenom ? '$' + Math.round(weightedValSum / valWeightDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-age').innerText = ageWeightDenom ? (weightedAgeSum / ageWeightDenom).toFixed(1) : 'N/A';
     }
 
     function updateViz() {
         if (!currentCSVData.length) return;
         const ids = getSelectedIDs();
-        const filtered = ids.length ? currentCSVData.filter(r => ids.includes(r.GEO_ID)) : currentCSVData;
         const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
-        const sums = cols.map(c => ({ param: c, val: filtered.reduce((a, b) => a + (Number(b[c]) || 0), 0) })).sort((a, b) => b.val - a.val);
+        
+        const sums = cols.map(c => {
+            let total = 0;
+            ids.forEach(geoid => {
+                const row = currentCSVData.find(r => r.GEO_ID === geoid);
+                if (row) total += (Number(row[c]) || 0) * getBGWeight(geoid);
+            });
+            return { param: c, val: Math.round(total) };
+        }).sort((a, b) => b.val - a.val);
+
         document.querySelector('#data-table tbody').innerHTML = sums.map(s => `<tr><td>${s.param}</td><td>${s.val.toLocaleString()}</td></tr>`).join('');
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(document.getElementById('barChart'), {
-            type: 'bar', data: { labels: sums.map(s => s.param), datasets: [{ label: 'Count', data: sums.map(s => s.val), backgroundColor: '#002f5d' }] },
+            type: 'bar', data: { labels: sums.map(s => s.param), datasets: [{ label: 'Apportioned Count', data: sums.map(s => s.val), backgroundColor: '#002f5d' }] },
             options: { indexAxis: 'y', maintainAspectRatio: false }
         });
     }
@@ -276,10 +318,11 @@ const tableMapping = {
         buildingsLayer.clearLayers();
         const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
         document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-        L.geoJSON(bResults, { style: { color: '#FF0000', weight: 1, fillColor: '#FFFF00', fillOpacity: 1 } }).addTo(buildingsLayer);
+        L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
         updateMapLayer(); updateKPIs(); updateViz();
     });
 
+    // Control Buttons (Code 1 Styles)
     const clearBtn = L.control({position: 'topright'});
     clearBtn.onAdd = () => {
         const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
@@ -291,7 +334,6 @@ const tableMapping = {
             document.getElementById('address-search').value = '';
             document.getElementById('suggestions').innerHTML = '';
             currentShape = null; activeBlockGroup = null; 
-            document.getElementById('map-layer-select').value = 'default';
             document.getElementById('count-display').innerText = "0";
             updateMapLayer(); updateKPIs(); updateViz();
         };
@@ -314,17 +356,15 @@ const tableMapping = {
         div.innerHTML = '<a href="#" title="Expand Map" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-weight:bold;">⤢</a>';
         div.onclick = (e) => { 
             e.preventDefault(); 
-            const container = document.getElementById('map-container');
-            const dataSide = document.getElementById('data-container');
-            container.classList.toggle('expanded');
-            dataSide.classList.toggle('hidden');
+            document.getElementById('map-container').classList.toggle('expanded');
+            document.getElementById('data-container').classList.toggle('hidden');
             setTimeout(() => map.invalidateSize(), 350); 
         };
         return div;
     };
     expandBtn.addTo(map);
 
-    // --- SEARCH LOGIC ---
+    // Search Logic (Code 1 Popup Features)
     const searchInput = document.getElementById('address-search');
     const suggestionsList = document.getElementById('suggestions');
 
@@ -343,10 +383,8 @@ const tableMapping = {
                 suggestionsList.innerHTML = '';
                 map.setView(coords, 17);
                 if (currentMarker) map.removeLayer(currentMarker);
-                
                 currentMarker = L.circleMarker(coords, { radius: 10, color: 'red', fillColor: '#f03', fillOpacity: 0.8 }).addTo(map);
 
-                // Combined Popup Logic (Input and Buttons in one view)
                 const container = document.createElement('div');
                 container.style.textAlign = 'center';
                 container.innerHTML = `
@@ -364,32 +402,19 @@ const tableMapping = {
                         const radiusKm = parseFloat(miles) * 1.60934;
                         const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
                         const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
-                        
                         drawnItems.clearLayers();
                         currentShape = circleGeoJSON;
                         activeBlockGroup = null;
-                        
                         L.geoJSON(circleGeoJSON, { style: { color: '#3388ff', weight: 2, fillOpacity: 0.2 } }).addTo(drawnItems);
-                        
                         const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
                         document.getElementById('count-display').innerText = bResults.length.toLocaleString();
                         buildingsLayer.clearLayers();
                         L.geoJSON(bResults, { style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } }).addTo(buildingsLayer);
-                        
                         updateMapLayer(); updateKPIs(); updateViz();
                         map.closePopup();
                     }
                 };
-
                 container.querySelector('#pop-cancel').onclick = () => map.closePopup();
-
-                // Highlight Block Group on selection
-                const point = turf.point([f.geometry.coordinates[0], f.geometry.coordinates[1]]);
-                const match = bgData.features.find(bg => turf.booleanPointInPolygon(point, bg));
-                if (match && !currentShape) {
-                    activeBlockGroup = match.properties.GEOIDFQ;
-                    updateMapLayer(); updateKPIs(); updateViz();
-                }
             };
             suggestionsList.appendChild(li);
         });
@@ -413,11 +438,17 @@ const tableMapping = {
 
     document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
     
-    const bFiles = ['Buildings_Residential_Zones_part1.geojson', 'Buildings_Residential_Zones_part2.geojson', 'Buildings_Residential_Zones_part3.geojson', 'Buildings_Residential_Zones_part4.geojson'];
-    for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features)); }
+    // Updated Building Files (Code 2 Files)
+    const bFiles = [
+        '1-9-26 Hun residential buildings with geoid p1.geojson',
+        '1-9-26 Hun residential buildings with geoid p2.geojson',
+        '1-9-26 Hun residential buildings with geoid p3.geojson',
+        '1-9-26 Hun residential buildings with geoid p4.geojson'
+    ];
+    for (const f of bFiles) { fetch(f).then(r => r.json()).then(d => allBuildings = allBuildings.concat(d.features)).catch(e=>null); }
 
     const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson', 'Street_Address_Inside_City_LatLon_part2.geojson'];
-    for (const f of aFiles) { fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features)); }
+    for (const f of aFiles) { fetch(f).then(r => r.json()).then(d => allAddresses = allAddresses.concat(d.features)).catch(e=>null); }
     
     initKPIs();
 })();
