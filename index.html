@@ -75,6 +75,7 @@
                     <option value="Language">Language</option>
                     <option value="Population-related">Population-related</option>
                     <option value="Transportation-related">Transportation-related</option>
+                    <option value="Totals/Median Values">Totals / Median Values</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -306,6 +307,61 @@ async function initKPIs() {
 
 // --- UPDATE TABLE + BAR CHART ---
 function updateViz() {
+    const category = document.getElementById('category-select').value;
+const selectedCol = document.getElementById('map-layer-select').value;
+
+if (category === "Totals/Median Values" && selectedCol) {
+    const ids = getSelectedIDs();
+    let totalVal = 0;
+
+    ids.forEach(geoid => {
+        let weight = getBGWeight(geoid);
+
+        switch(selectedCol) {
+            case "Total Population":
+                const popRow = kpiRaw.pop.find(r => r.GEO_ID === geoid);
+                totalVal += (popRow?.Total || 0) * weight;
+                break;
+            case "Total Households":
+                const hhRow = kpiRaw.hh.find(r => r.GEO_ID === geoid);
+                totalVal += (hhRow?.Total || 0) * weight;
+                break;
+            case "Median Income":
+                const incRow = kpiRaw.inc.find(r => r.GEO_ID === geoid);
+                const hh = kpiRaw.hh.find(r => r.GEO_ID === geoid)?.Total || 0;
+                if (hh) totalVal += (incRow?.['Median household income (past 12 months)'] || 0) * weight * hh;
+                break;
+            case "Median House Value":
+                const houRow = kpiRaw.hou.find(r => r.GEO_ID === geoid);
+                const ownerCount = kpiRaw.owners2.find(r => r.GEO_ID === geoid)?.Total || 1;
+                totalVal += (houRow?.['Median value ($)'] || 0) * weight * ownerCount;
+                break;
+            case "Median Age":
+                const ageRow = kpiRaw.age.find(r => r.GEO_ID === geoid);
+                const pop = kpiRaw.pop.find(r => r.GEO_ID === geoid)?.Total || 1;
+                totalVal += (ageRow?.['Median Age'] || 0) * weight * pop;
+                break;
+        }
+    });
+
+    // Set table
+    const tbody = document.querySelector('#data-table tbody');
+    tbody.innerHTML = `<tr><td>${selectedCol}</td><td>${Math.round(totalVal).toLocaleString()}</td></tr>`;
+
+    // Set bar chart
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: [selectedCol],
+            datasets: [{ label: 'Value', data: [Math.round(totalVal)], backgroundColor: '#002f5d' }]
+        },
+        options: { indexAxis: 'y', maintainAspectRatio: false }
+    });
+
+    return; // Skip normal table/chart update
+}
+    
     if (!currentCSVData.length) return;
 
     const ids = getSelectedIDs(); // selected GEOIDs
@@ -466,11 +522,36 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     });
 
     // --- CATEGORY & TABLE SELECTION ---
-    document.getElementById('category-select').addEventListener('change', e=>{
-        const ts = document.getElementById('table-select');
-        ts.innerHTML='<option value="">-- Select --</option>';
-        if(tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f=>ts.innerHTML+=`<option value="${f}">${f}</option>`);
-    });
+  document.getElementById('category-select').addEventListener('change', e => {
+    const ts = document.getElementById('table-select');
+    const mls = document.getElementById('map-layer-select');
+
+    if (e.target.value === "Totals/Median Values") {
+        // Disable table selection
+        ts.innerHTML = '<option value="">-- Disabled --</option>';
+        ts.disabled = true;
+
+        // Set map layer dropdown options
+        const options = ["Total Population", "Total Households", "Median Income", "Median House Value", "Median Age"];
+        mls.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
+    } else {
+        // Enable table selection for normal categories
+        ts.disabled = false;
+        ts.innerHTML = '<option value="">-- Select --</option>';
+        if (tableMapping[e.target.value]) {
+            Object.keys(tableMapping[e.target.value].files)
+                .forEach(f => ts.innerHTML += `<option value="${f}">${f}</option>`);
+        }
+
+        // Reset map layer
+        mls.innerHTML = '<option value="default">Default Map</option>';
+    }
+
+    // Clear previous CSV data
+    currentCSVData = [];
+    updateKPIs();
+    updateViz();
+});
 
     document.getElementById('table-select').addEventListener('change', async e=>{
         const cat = document.getElementById('category-select').value;
@@ -482,7 +563,11 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
         updateViz();
     });
 
-    document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
+    document.getElementById('map-layer-select').addEventListener('change', () => {
+    updateMapLayer();
+    updateKPIs();
+    updateViz(); // <-- add this to update table/bar chart immediately
+});
 
     // --- LOAD BUILDINGS & ADDRESSES ---
     const bFiles = [
