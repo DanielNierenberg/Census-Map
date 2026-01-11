@@ -1,217 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Huntsville ACS 2023 Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Huntsville ACS 2023 Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --dark-blue: #002f5d; --light-gray: #f4f7f6; --border-color: #ddd; --accent-color: #ff00ff; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: var(--light-gray); overflow: hidden; }
+        
+        #banner { height: 5%; width: 100%; background: var(--dark-blue); color: white; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+        #banner h1 { font-size: 1.2rem; margin: 0; }
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        #main-container { display: flex; height: 95%; padding: 10px; box-sizing: border-box; gap: 15px; transition: all 0.3s ease; }
+        
+        #map-container { flex: 0 0 33%; height: 100%; position: relative; background: white; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; transition: flex 0.3s ease; }
+        #map-container.expanded { flex: 0 0 100%; }
+        #map { height: 100%; width: 100%; }
+        
+        #data-container { flex: 1; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 5px; }
+        #data-container.hidden { display: none; }
 
-<style>
-:root {
-  --dark-blue:#002f5d;
-  --light-gray:#f4f7f6;
-  --border-color:#ddd;
-}
-html,body {
-  margin:0; padding:0; height:100%; width:100%;
-  font-family:sans-serif;
-  background:var(--light-gray);
-  overflow:hidden;
-}
-#banner {
-  height:5%;
-  background:var(--dark-blue);
-  color:white;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-#banner h1 { font-size:1.2rem; margin:0; }
+        #search-panel { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; padding: 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); width: 220px; }
+        #address-search { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        #suggestions { list-style: none; padding: 0; margin: 5px 0 0 0; max-height: 150px; overflow-y: auto; border: 1px solid #eee; font-size: 0.8em; background: white; }
+        #suggestions li { padding: 6px; cursor: pointer; border-bottom: 1px solid #f9f9f9; }
+        #suggestions li:hover { background: #f0f0f0; }
 
-#main-container {
-  height:95%;
-  display:flex;
-  padding:10px;
-  gap:15px;
-  box-sizing:border-box;
-}
-
-#map-container {
-  flex:0 0 33%;
-  position:relative;
-  background:white;
-  border-radius:8px;
-  border:1px solid var(--border-color);
-  overflow:hidden;
-  transition:flex .3s;
-}
-#map-container.expanded { flex:0 0 100%; }
-
-#map { height:100%; width:100%; }
-
-#data-container {
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  overflow-y:auto;
-}
-#data-container.hidden { display:none; }
-
-#search-panel {
-  position:absolute;
-  top:10px; left:50px;
-  z-index:1000;
-  background:white;
-  padding:8px;
-  width:220px;
-  border-radius:4px;
-  box-shadow:0 2px 5px rgba(0,0,0,.2);
-}
-#address-search { width:100%; padding:6px; }
-#suggestions {
-  list-style:none;
-  margin:5px 0 0;
-  padding:0;
-  max-height:150px;
-  overflow-y:auto;
-  border:1px solid #eee;
-  font-size:.8em;
-}
-#suggestions li {
-  padding:6px;
-  cursor:pointer;
-}
-#suggestions li:hover { background:#f0f0f0; }
-
-.filter-row { display:flex; gap:10px; }
-.filter-group { flex:1; }
-.filter-group label {
-  font-size:.7em;
-  font-weight:bold;
-  color:#555;
-}
-
-.kpi-row {
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:8px;
-}
-.kpi-card {
-  background:white;
-  border:1px solid var(--border-color);
-  border-radius:6px;
-  padding:8px;
-  text-align:center;
-}
-.kpi-card .value { font-weight:bold; color:var(--dark-blue); }
-
-.viz-row {
-  display:flex;
-  gap:10px;
-  min-height:300px;
-}
-.table-container, .chart-container {
-  flex:1;
-  background:white;
-  border-radius:6px;
-  border:1px solid var(--border-color);
-  padding:8px;
-  overflow:auto;
-}
-
-table { width:100%; border-collapse:collapse; font-size:.75em; }
-th { background:#f8f9fa; position:sticky; top:0; }
-td,th { padding:6px; border-bottom:1px solid #eee; }
-
-.info.legend {
-  background:white;
-  padding:10px;
-  border-radius:5px;
-  border:1px solid #ccc;
-  font-size:.75em;
-}
-.info.legend i {
-  width:18px;
-  height:18px;
-  float:left;
-  margin-right:8px;
-}
-</style>
+        .filter-row { display: flex; gap: 10px; }
+        .filter-group { flex: 1; }
+        .filter-group label { display: block; font-size: 0.7em; font-weight: bold; margin-bottom: 3px; color: #555; }
+        select { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); }
+        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .kpi-card { background: white; padding: 10px 5px; border-radius: 6px; text-align: center; border: 1px solid var(--border-color); }
+        .kpi-card .value { display: block; font-size: 1em; font-weight: bold; color: var(--dark-blue); }
+        .kpi-card .label { font-size: 0.6em; color: #777; font-weight: bold; text-transform: uppercase; }
+        .viz-row { display: flex; gap: 10px; flex: 1; min-height: 300px; }
+        .table-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); overflow-y: auto; }
+        .chart-container { flex: 1; background: white; border-radius: 6px; border: 1px solid var(--border-color); padding: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75em; }
+        th { background: #f8f9fa; padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 1px solid #ddd; }
+        td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+        .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; }
+        .info.legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
+    </style>
 </head>
-
 <body>
-<div id="banner">
-  <h1>Huntsville ACS 2023 5-year Block Group Data</h1>
-</div>
+
+<div id="banner"><h1>Huntsville ACS 2023 5-year Block Group Data</h1></div>
 
 <div id="main-container">
-<div id="map-container">
+    <div id="map-container">
+        <div id="search-panel">
+            <input type="text" id="address-search" placeholder="Type an address..." autocomplete="off">
+            <ul id="suggestions"></ul>
+        </div>
+        <div id="map"></div>
+        <div style="position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:5px; border-radius:4px; font-size:0.7em; border:1px solid #ccc;">
+            Res. Buildings (Selected): <span id="count-display" style="font-weight:bold">0</span>
+        </div>
+    </div>
 
-  <div id="search-panel">
-    <input id="address-search" placeholder="Type an address…" autocomplete="off">
-    <ul id="suggestions"></ul>
-  </div>
+    <div id="data-container">
+        <div class="filter-row">
+            <div class="filter-group">
+                <label>CATEGORY SELECTION</label>
+                <select id="category-select">
+                    <option value="">-- Select --</option>
+                    <option value="Computer/Internet Access">Computer/Internet Access</option>
+                    <option value="Employment">Employment</option>
+                    <option value="Ethnicity">Ethnicity</option>
+                    <option value="House-related">House-related</option>
+                    <option value="Language">Language</option>
+                    <option value="Population-related">Population-related</option>
+                    <option value="Transportation-related">Transportation-related</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>CENSUS TABLE SELECTION</label>
+                <select id="table-select"><option value="">Select Category First</option></select>
+            </div>
+            <div class="filter-group">
+                <label>MAP LAYER VIEW</label>
+                <select id="map-layer-select"><option value="default">Default Map</option></select>
+            </div>
+        </div>
 
-  <div id="map"></div>
+        <div class="kpi-row">
+            <div class="kpi-card"><span class="label">Total Population</span><span id="kpi-pop" class="value">0</span></div>
+            <div class="kpi-card"><span class="label">Total Households</span><span id="kpi-hh" class="value">0</span></div>
+            <div class="kpi-card"><span class="label">Median Income</span><span id="kpi-income" class="value">$0</span></div>
+            <div class="kpi-card"><span class="label">Median House Value</span><span id="kpi-house-val" class="value">$0</span></div>
+            <div class="kpi-card"><span class="label">Median Age</span><span id="kpi-age" class="value">0</span></div>
+        </div>
 
-  <div style="position:absolute;bottom:10px;left:10px;z-index:1000;background:white;padding:5px;border-radius:4px;font-size:.7em;border:1px solid #ccc">
-    Res. Buildings (Selected):
-    <span id="count-display" style="font-weight:bold">0</span>
-  </div>
-</div>
+        <div class="viz-row">
+            <div class="table-container">
+                <table id="data-table">
+                    <thead>
+  <tr>
+    <th>Census Parameter</th>
+    <th>Count (% of total)</th>
+  </tr>
+</thead>
 
-<div id="data-container">
-
-<div class="filter-row">
-  <div class="filter-group">
-    <label>CATEGORY</label>
-    <select id="category-select">
-      <option value="">-- Select --</option>
-      <option value="Computer/Internet Access">Computer/Internet Access</option>
-      <option value="Employment">Employment</option>
-      <option value="Ethnicity">Ethnicity</option>
-      <option value="House-related">House-related</option>
-      <option value="Language">Language</option>
-      <option value="Population-related">Population-related</option>
-      <option value="Transportation-related">Transportation-related</option>
-    </select>
-  </div>
-
-  <div class="filter-group">
-    <label>TABLE</label>
-    <select id="table-select"><option>Select Category</option></select>
-  </div>
-
-  <div class="filter-group">
-    <label>MAP LAYER</label>
-    <select id="map-layer-select">
-      <option value="default">Default Map</option>
-    </select>
-  </div>
-</div>
-
-<div class="kpi-row">
-  <div class="kpi-card"><div>Total Population</div><div id="kpi-pop" class="value">0</div></div>
-  <div class="kpi-card"><div>Total Households</div><div id="kpi-hh" class="value">0</div></div>
-  <div class="kpi-card"><div>Median Income</div><div id="kpi-income" class="value">$0</div></div>
-  <div class="kpi-card"><div>Median House Value</div><div id="kpi-house-val" class="value">$0</div></div>
-  <div class="kpi-card"><div>Median Age</div><div id="kpi-age" class="value">0</div></div>
-</div>
-
-<div class="viz-row">
-  <div class="table-container">
-    <table id="data-table">
-      <thead><tr><th>Parameter</th><th>Count (% of total)</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="chart-container"><canvas id="barChart"></canvas></div>
-</div>
-
-</div>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="chart-container"><canvas id="barChart"></canvas></div>
+        </div>
+        <div style="font-size: 0.7em; color: #777;">Data was collected from the 2023 5-year American Community Survey.</div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -220,220 +120,408 @@ td,th { padding:6px; border-bottom:1px solid #eee; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
 <script>
-// ===================== MAP SETUP =====================
-const map = L.map('map',{renderer:L.canvas()}).setView([34.7304,-86.5861],12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+const tableMapping = {
+    'Computer/Internet Access': { folder: 'Computer and Internet Access', files: {'Computer/Internet Access': 'Computer and Internet Access by Household (DONE).csv'} },
+    'Employment': { folder: 'Employment', files: {'Employment Status': 'Employment Status (DONE).csv', 'Household Income': 'Household Income (DONE).csv'} },
+    'Ethnicity': { folder: 'Ethnicity', files: {'Race': 'Race (DONE).csv'} },
+    'House-related': { folder: 'Housing-related', files: {'Year Housing Built': 'Building Structure Year (DONE).csv', 'Mobile Homes': 'Mobile Homes (DONE).csv', 'Housing Unit Value': 'Owner-Occupied Housing Unit Value (DONE).csv'} },
+    'Language': { folder: 'Language', files: {'Limited English': 'Limited English Households (DONE).csv'} },
+    'Population-related': { folder: 'Population-related', files: {'Age and Gender': 'Age and Gender (DONE).csv', 'Family Size': 'Family Size (DONE).csv', 'Marriage, Children, and Living alone': 'Marriage, Children, and Living alone status (DONE).csv', 'Health Insurance Status': 'Population - No Health Insurance (DONE).csv', 'Education': 'Population by Education (DONE).csv', 'Poverty Status': 'Population by Poverty Status (DONE).csv', 'SNAP and Disability Status': 'SNAP and Disability (DONE).csv', 'Veterans': 'Veteran Status (DONE).csv'} },
+    'Transportation-related': { folder: 'Transportation-related', files: {'Means of Transportation': 'Means of Transportation to work (DONE).csv', 'Travel time to work': 'Travel Time to Work (DONE).csv', 'Vehicle availability': 'Vehicle Availability - Households (DONE).csv'} }
+};
 
-// --- City boundary (FEATURE 1)
-fetch('Boundary_City_Huntsville_poly.geojson')
-.then(r=>r.json())
-.then(d=>L.geoJSON(d,{
-  style:{color:'orange',weight:2,fillOpacity:.1},
-  interactive:false
-}).addTo(map));
+// Map table names to denominator keys in your Totals CSVs
+const tableDenominatorMap = {
+    "Computer/Internet Access": "hh",
+    "Employment Status": "pop16",
+    "Household Income": "hh",
+    "Race": "pop",
+    "Year Housing Built": "housing",
+    "Mobile Homes": "owners",
+    "Housing Unit Value": "owners2",
+    "Limited English": "hh",
+    "Age and Gender": "pop",
+    "Family Size": "hh",
+    "Marriage, Children, and Living alone": "hh",
+    "Health Insurance Status": "popNonInst",
+    "Education": "pop18",
+    "Poverty Status": "pop18",
+    "SNAP and Disability Status": "hh",
+    "Veterans": "pop18",
+    "Means of Transportation": "workers18",
+    "Travel time to work": "workers18B",
+    "Vehicle availability": "occupiedHH"
+};
 
-// Layers
-const buildingsLayer = L.layerGroup().addTo(map);
-const drawnItems = new L.FeatureGroup().addTo(map);
 
-// --- Legend (FEATURE 2)
-const legend = L.control({position:'bottomright'});
+(async function() {
+    const map = L.map('map', { renderer: L.canvas() }).setView([34.7304, -86.5861], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-// --- Controls (FEATURE 4)
-L.control({position:'topright'}).onAdd=()=>{
-  const d=L.DomUtil.create('div','leaflet-bar');
-  d.innerHTML='<a href="#">🏠</a>';
-  d.onclick=e=>{e.preventDefault();map.setView([34.7304,-86.5861],12);}
-  return d;
-}.addTo(map);
+    const buildingsLayer = L.layerGroup().addTo(map);
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    
+    let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [], buildingCounts = {};
+    let activeBlockGroup = null, chartInstance = null, currentMarker = null, currentShape = null;
 
-// --- Expand
-L.control({position:'topright'}).onAdd=()=>{
-  const d=L.DomUtil.create('div','leaflet-bar');
-  d.innerHTML='<a href="#">⤢</a>';
-  d.onclick=e=>{
-    e.preventDefault();
-    document.getElementById('map-container').classList.toggle('expanded');
-    document.getElementById('data-container').classList.toggle('hidden');
-    setTimeout(()=>map.invalidateSize(),350);
-  };
-  return d;
-}.addTo(map);
+    const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
 
-// --- Clear (FEATURE 5)
-L.control({position:'topright'}).onAdd=()=>{
-  const d=L.DomUtil.create('div','leaflet-bar');
-  d.innerHTML='<a href="#">❌</a>';
-  d.onclick=e=>{
-    e.preventDefault();
-    drawnItems.clearLayers();
-    buildingsLayer.clearLayers();
-    if(currentMarker) map.removeLayer(currentMarker);
-    activeBlockGroup=null;
-    currentShape=null;
-    document.getElementById('address-search').value='';
-    document.getElementById('suggestions').innerHTML='';
-    document.getElementById('map-layer-select').value='default';
-    document.getElementById('count-display').innerText='0';
-    legend.remove();
-    updateMapLayer(); updateKPIs(); updateViz();
-  };
-  return d;
-}.addTo(map);
+    async function loadCSV(path) {
+        const r = await fetch(path);
+        const t = await r.text();
+        return Papa.parse(t, { header: true, dynamicTyping: true, skipEmptyLines: true }).data;
+    }
 
-// ===================== DATA =====================
-let bgLayer, bgData, currentCSVData=[];
-let allBuildings=[], allAddresses=[];
-let activeBlockGroup=null, currentShape=null, currentMarker=null;
-let chartInstance=null;
+    // Load building counts
+    const countsData = await loadCSV('1-9-26 Hun residential building counts per block group.csv');
+    countsData.forEach(row => { buildingCounts[row.GEOIDFQ] = row.building_count; });
 
-async function loadCSV(p){
-  const t=await fetch(p).then(r=>r.text());
-  return Papa.parse(t,{header:true,dynamicTyping:true}).data;
+    const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
+
+    function getSelectedIDs() {
+        if (currentShape) {
+            return bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
+        } else if (activeBlockGroup) {
+            return [activeBlockGroup];
+        }
+        return bgData.features.map(f => f.properties.GEOIDFQ);
+    }
+
+    // --- Weight calculation including 0-building BGs ---
+    function getBGWeight(geoid) {
+        if (activeBlockGroup === geoid) return 1.0;
+        if (!currentShape) return 1.0;
+
+        const totalInBG = buildingCounts[geoid] || 0;
+
+        if (totalInBG > 0) {
+            const selectedInBG = allBuildings.filter(
+                b => b.properties.GEOIDFQ === geoid && turf.booleanIntersects(b, currentShape)
+            ).length;
+            return selectedInBG / totalInBG;
+        } else {
+            const bgFeature = bgData.features.find(f => f.properties.GEOIDFQ === geoid);
+            if (!bgFeature) return 0;
+            const bgArea = turf.area(bgFeature);
+            const intersection = turf.intersect(bgFeature, currentShape);
+            const intersectArea = intersection ? turf.area(intersection) : 0;
+            return intersectArea / bgArea;
+        }
+    }
+
+    bgLayer = L.geoJSON(bgData, {
+        style: initialStyle,
+        onEachFeature: (feature, layer) => {
+            layer.on('click', () => {
+                const id = feature.properties.GEOIDFQ;
+                drawnItems.clearLayers(); currentShape = null;
+                activeBlockGroup = (activeBlockGroup === id) ? null : id;
+                updateMapLayer(); updateKPIs(); updateViz();
+            });
+        }
+    }).addTo(map);
+
+    let kpiRaw = {};
+async function initKPIs() {
+    // Population & households
+    kpiRaw.pop = await loadCSV('Totals/Total Population.csv');                     // Total Population
+    kpiRaw.hh = await loadCSV('Totals/Total Households.csv');                      // Total Households
+    kpiRaw.hou = await loadCSV('Housing-related/Median Owner-Occupied Housing Unit Value (DONE).csv'); 
+    kpiRaw.owners = await loadCSV('Totals/Total Population in Owner-Occupied Housing Units.csv');          
+    kpiRaw.owners2 = await loadCSV('Totals/Total Owner-Occupied Housing Units.csv');           
+    kpiRaw.age = await loadCSV('Population-related/Median Age (DONE).csv'); 
+    kpiRaw.inc = await loadCSV('Employment/Median Household Income (DONE).csv');
+
+    // --- ADD MISSING TOTALS REQUIRED FOR TABLES ---
+    kpiRaw.pop16 = await loadCSV('Totals/Total Population - 16yrs and over.csv');          // Employment Status
+    kpiRaw.pop18 = await loadCSV('Totals/Total Population - 18 yrs and over.csv');         // Education, Poverty, Veterans
+    kpiRaw.popNonInst = await loadCSV('Totals/Total Population - Non Institutionalized.csv');           // Health Insurance      
+    kpiRaw.occupiedHH = await loadCSV('Totals/Total Occupied Housing Units.csv');          // Vehicle Availability
+    kpiRaw.housing = await loadCSV('Totals/Total Housing Units.csv');  
+    kpiRaw.workers18 = await loadCSV('Totals/Total Workers 18 years and over.csv'); 
+    kpiRaw.workers18B = await loadCSV('Totals/Total Non-remote workers 18 years and over.csv');  
+
+    updateKPIs();  // initial KPI update
 }
 
-// --- Block groups
-fetch('Huntsville_Block_Groups.geojson')
-.then(r=>r.json())
-.then(d=>{
-  bgData=d;
-  bgLayer=L.geoJSON(d,{
-    style:{color:'black',weight:1,fillOpacity:0},
-    onEachFeature:(f,l)=>{
-      // --- Tooltip (FEATURE 3)
-      l.bindTooltip(`GEOID: ${f.properties.GEOIDFQ}`);
-      l.on('click',()=>{
-        drawnItems.clearLayers();
-        currentShape=null;
-        activeBlockGroup=activeBlockGroup===f.properties.GEOIDFQ?null:f.properties.GEOIDFQ;
-        updateMapLayer(); updateKPIs(); updateViz();
-      });
+    function updateKPIs() {
+        const ids = getSelectedIDs();
+        let totalPop = 0, totalHH = 0;
+        let weightedIncSum = 0, incWeightDenom = 0;
+        let weightedValSum = 0, valWeightDenom = 0;
+        let weightedAgeSum = 0, ageWeightDenom = 0;
+
+        ids.forEach(geoid => {
+            const weight = getBGWeight(geoid);
+
+            // Population & households
+            const popRow = kpiRaw.pop.find(r => r.GEO_ID === geoid);
+            const hhRow = kpiRaw.hh.find(r => r.GEO_ID === geoid);
+            const bgPop = (popRow?.Total || 0) * weight;
+            const bgHH = (hhRow?.Total || 0) * weight;
+
+            totalPop += bgPop;
+            totalHH += bgHH;
+
+            // Median Income (weighted by HH)
+            const incRow = kpiRaw.inc.find(r => r.GEO_ID === geoid);
+            const incVal = incRow?.['Median household income (past 12 months)'];
+            if (incVal > 0 && bgHH > 0) {
+                weightedIncSum += incVal * bgHH;
+                incWeightDenom += bgHH;
+            }
+
+            // Median Home Value (weighted by owner-occupied units or HH)
+            const houRow = kpiRaw.hou.find(r => r.GEO_ID === geoid);
+            const houVal = houRow?.['Median value ($)'] || 0;
+
+            let ownerCount = 0;
+            const ownerRow = kpiRaw.owners.find(r => r.GEO_ID === geoid);
+            if (ownerRow?.Total > 0) {
+                ownerCount = ownerRow.Total * weight;
+            } else {
+                ownerCount = bgHH;
+            }
+
+            if (houVal > 0 && ownerCount > 0) {
+                weightedValSum += houVal * ownerCount;
+                valWeightDenom += ownerCount;
+            }
+
+            // Median Age (weighted by population)
+            const ageRow = kpiRaw.age.find(r => r.GEO_ID === geoid);
+            const ageVal = ageRow?.['Median Age'];
+            if (ageVal > 0) {
+                weightedAgeSum += ageVal * bgPop;
+                ageWeightDenom += bgPop;
+            }
+        });
+
+        document.getElementById('kpi-pop').innerText = Math.round(totalPop).toLocaleString();
+        document.getElementById('kpi-hh').innerText = Math.round(totalHH).toLocaleString();
+        document.getElementById('kpi-income').innerText = incWeightDenom ? '$' + Math.round(weightedIncSum / incWeightDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-house-val').innerText = valWeightDenom ? '$' + Math.round(weightedValSum / valWeightDenom).toLocaleString() : 'N/A';
+        document.getElementById('kpi-age').innerText = ageWeightDenom ? (weightedAgeSum / ageWeightDenom).toFixed(1) : 'N/A';
     }
-  }).addTo(map);
-});
 
-// ===================== DRAW =====================
-map.addControl(new L.Control.Draw({
-  draw:{polygon:true,rectangle:true,circle:true,polyline:false,marker:false,circlemarker:false},
-  edit:false
-}));
+// --- UPDATE TABLE + BAR CHART ---
+function updateViz() {
+    if (!currentCSVData.length) return;
 
-map.on('draw:created',e=>{
-  drawnItems.clearLayers();
-  drawnItems.addLayer(e.layer);
-  activeBlockGroup=null;
-  currentShape=e.layer instanceof L.Circle
-    ? turf.circle([e.layer.getLatLng().lng,e.layer.getLatLng().lat],e.layer.getRadius()/1000,{units:'kilometers'})
-    : e.layer.toGeoJSON();
+    const ids = getSelectedIDs(); // selected GEOIDs
+    const selectedTable = document.getElementById('table-select').value;
+    const denomKey = tableDenominatorMap[selectedTable];
+    if (!denomKey) {
+        console.warn(`No denominator key for table "${selectedTable}"`);
+        return;
+    }
+    
+    // --- Set dynamic column title ---
+const denomNameMap = {
+    hh: "Households",
+    pop: "Population",
+    pop16: "Population 16+",
+    pop18: "Population 18+",
+    popNonInst: "Non-Institutionalized Population",
+    housing: "Housing Units",
+    owners: "Population in Owner-Occupied Units",
+    owners2: "Owner-Occupied Units",
+    workers18: "Workers 18+",
+    workers18B: "Workers 18+ (non-remote)",
+    occupiedHH: "Occupied Housing Units"
+};
 
-  const hits=allBuildings.filter(b=>turf.booleanIntersects(b,currentShape));
-  document.getElementById('count-display').innerText=hits.length;
-  buildingsLayer.clearLayers();
-  L.geoJSON(hits,{style:{color:'#ff00ff',fillOpacity:.7}}).addTo(buildingsLayer);
-  updateMapLayer(); updateKPIs(); updateViz();
-});
+// First column
+const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
+tableHeaderParam.innerText = selectedTable || "Census Parameter";
 
-// ===================== SEARCH + RADIUS (FEATURE 6–9)
-document.getElementById('address-search').addEventListener('input',function(){
-  const q=this.value.toLowerCase();
-  const s=document.getElementById('suggestions');
-  s.innerHTML='';
-  if(q.length<2) return;
-  allAddresses.filter(a=>a.properties.Street_Address.toLowerCase().includes(q)).slice(0,10)
-  .forEach(f=>{
-    const li=document.createElement('li');
-    li.textContent=f.properties.Street_Address;
-    li.onclick=()=>{
-      const coords=[f.geometry.coordinates[1],f.geometry.coordinates[0]];
-      map.setView(coords,17);
-      if(currentMarker) map.removeLayer(currentMarker);
-      currentMarker=L.circleMarker(coords,{radius:10,color:'red'}).addTo(map);
+// Second column
+const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
+tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
 
-      const popup=document.createElement('div');
-      popup.innerHTML=`
-        <strong>${f.properties.Street_Address}</strong><br>
-        Radius (miles):
-        <input id="rad" type="number" value="1" style="width:80%"><br>
-        <button id="go">Submit</button>
-      `;
-      currentMarker.bindPopup(popup).openPopup();
 
-      popup.querySelector('#go').onclick=()=>{
-        const r=parseFloat(popup.querySelector('#rad').value)*1.60934;
-        currentShape=turf.circle([f.geometry.coordinates[0],f.geometry.coordinates[1]],r,{units:'kilometers'});
+    const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
+
+    const sums = cols.map(col => {
+        let totalVal = 0;
+        let totalDenom = 0;
+
+        ids.forEach(geoid => {
+            const row = currentCSVData.find(r => r.GEO_ID === geoid);
+            const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
+
+            if (!row || !denomRow) return; // skip missing data
+
+            const weight = getBGWeight(geoid);
+            const val = Number(row[col] ?? 0);
+            const denom = Number(denomRow.Total ?? 0);
+
+            // Only add weighted values if denominator > 0
+            if (denom > 0) {
+                totalVal += val * weight;
+                totalDenom += denom * weight;
+            }
+        });
+
+        const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
+        return { param: col, val: Math.round(totalVal), pct: pct.toFixed(1) };
+    }).sort((a,b) => b.val - a.val);
+
+    // --- Update HTML table ---
+    const tbody = document.querySelector('#data-table tbody');
+    tbody.innerHTML = sums.map(s => 
+        `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
+    ).join('');
+
+    // --- Update Bar Chart ---
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: sums.map(s => s.param),
+            datasets: [{
+                label: 'Apportioned Count',
+                data: sums.map(s => s.val),
+                backgroundColor: '#002f5d'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const pct = sums[ctx.dataIndex].pct;
+                            return `${ctx.dataset.label}: ${ctx.raw.toLocaleString()} (${pct}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+
+    // --- DRAWING HANDLERS ---
+    const drawControl = new L.Control.Draw({ draw: { polyline:false, marker:false, circlemarker:false, polygon:true, rectangle:true, circle:true }, edit:false });
+    map.addControl(drawControl);
+
+    map.on('draw:created', e => {
         drawnItems.clearLayers();
-        L.geoJSON(currentShape,{style:{color:'#3388ff',fillOpacity:.2}}).addTo(drawnItems);
+        drawnItems.addLayer(e.layer);
+        activeBlockGroup = null;
+        currentShape = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius()/1000, {units:'kilometers'}) : e.layer.toGeoJSON();
 
-        const hits=allBuildings.filter(b=>turf.booleanIntersects(b,currentShape));
-        document.getElementById('count-display').innerText=hits.length;
         buildingsLayer.clearLayers();
-        L.geoJSON(hits,{style:{color:'#ff00ff',fillOpacity:.7}}).addTo(buildingsLayer);
-
-        // --- auto BG select (FEATURE 7)
-        const pt=turf.point([f.geometry.coordinates[0],f.geometry.coordinates[1]]);
-        const bg=bgData.features.find(b=>turf.booleanPointInPolygon(pt,b));
-        if(bg) activeBlockGroup=bg.properties.GEOIDFQ;
+        const bResults = allBuildings.filter(b=>turf.booleanIntersects(b, currentShape));
+        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+        L.geoJSON(bResults, { style:{color:'#ff00ff', weight:1, fillOpacity:0.7} }).addTo(buildingsLayer);
 
         updateMapLayer(); updateKPIs(); updateViz();
-        map.closePopup();
-      };
+    });
+
+    // --- MAP CONTROLS ---
+    const clearBtn = L.control({position:'topright'});
+    clearBtn.onAdd = () => {
+        const div = L.DomUtil.create('div','leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Clear" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">❌</a>';
+        div.onclick = (e)=>{ e.preventDefault(); buildingsLayer.clearLayers(); drawnItems.clearLayers(); currentShape=null; activeBlockGroup=null; document.getElementById('count-display').innerText="0"; updateMapLayer(); updateKPIs(); updateViz(); };
+        return div;
     };
-    s.appendChild(li);
-  });
-});
+    clearBtn.addTo(map);
 
-// ===================== LOAD BUILDINGS & ADDRESSES =====================
-['p1','p2','p3','p4'].forEach(p=>{
-  fetch(`1-9-26 Hun residential buildings with geoid ${p}.geojson`)
-  .then(r=>r.json()).then(d=>allBuildings=allBuildings.concat(d.features));
-});
-['part1','part2'].forEach(p=>{
-  fetch(`Street_Address_Inside_City_LatLon_${p}.geojson`)
-  .then(r=>r.json()).then(d=>allAddresses=allAddresses.concat(d.features));
-});
-
-// ===================== MAP LAYER + LEGEND (FEATURE 2,10,11)
-function updateMapLayer(){
-  if(!bgLayer) return;
-  const col=document.getElementById('map-layer-select').value;
-  legend.remove();
-  let max=0;
-  if(col!=='default'&&currentCSVData.length)
-    max=Math.max(...currentCSVData.map(r=>r[col]||0));
-
-  bgLayer.eachLayer(l=>{
-    const geoid=l.feature.properties.GEOIDFQ;
-    const row=currentCSVData.find(r=>r.GEO_ID===geoid);
-    let style={color:'black',weight:1,fillOpacity:0};
-    if(col!=='default'){
-      const v=row?.[col]||0;
-      style.fill=true;
-      style.fillColor='#4a148c';
-      style.fillOpacity=max? (v/max)*.8:0;
-    }
-    if(activeBlockGroup===geoid){
-      style.color='#FFFF00'; style.weight=4;
-    }
-    l.setStyle(style);
-  });
-
-  if(col!=='default'){
-    legend.onAdd=()=>{
-      const d=L.DomUtil.create('div','info legend');
-      d.innerHTML=`<strong>${col}</strong><br>`;
-      [0,max*.25,max*.5,max*.75].forEach(g=>{
-        d.innerHTML+=`<i style="background:#4a148c;opacity:${g/max||.1}"></i>${Math.round(g)}+<br>`;
-      });
-      return d;
+    const expandBtn = L.control({position:'topright'});
+    expandBtn.onAdd = () => {
+        const div = L.DomUtil.create('div','leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Expand Map" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-weight:bold;">⤢</a>';
+        div.onclick = (e)=>{ e.preventDefault(); document.getElementById('map-container').classList.toggle('expanded'); document.getElementById('data-container').classList.toggle('hidden'); setTimeout(()=>map.invalidateSize(),350); };
+        return div;
     };
-    legend.addTo(map);
-  }
-}
+    expandBtn.addTo(map);
 
-// ===================== KPI / TABLE / CHART
-// (UNCHANGED Code 2 logic — omitted here ONLY because it was already validated above)
-// KEEP YOUR EXISTING updateKPIs(), updateViz(), mappings, denominators EXACTLY AS BEFORE
+    // --- SEARCH ---
+    const searchInput = document.getElementById('address-search');
+    const suggestionsList = document.getElementById('suggestions');
 
+    searchInput.addEventListener('input', function(){
+        const query = this.value.toLowerCase();
+        suggestionsList.innerHTML = '';
+        if(query.length<2) return;
+        const matches = allAddresses.filter(f=>f.properties.Street_Address.toLowerCase().includes(query)).slice(0,10);
+        matches.forEach(f=>{
+            const li = document.createElement('li');
+            li.textContent = f.properties.Street_Address;
+            li.onclick = ()=>{
+                const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+                searchInput.value = f.properties.Street_Address;
+                suggestionsList.innerHTML='';
+                map.setView(coords,17);
+                if(currentMarker) map.removeLayer(currentMarker);
+                currentMarker = L.circleMarker(coords,{radius:10,color:'red'}).addTo(map);
+            };
+            suggestionsList.appendChild(li);
+        });
+    });
+
+    // --- CATEGORY & TABLE SELECTION ---
+    document.getElementById('category-select').addEventListener('change', e=>{
+        const ts = document.getElementById('table-select');
+        ts.innerHTML='<option value="">-- Select --</option>';
+        if(tableMapping[e.target.value]) Object.keys(tableMapping[e.target.value].files).forEach(f=>ts.innerHTML+=`<option value="${f}">${f}</option>`);
+    });
+
+    document.getElementById('table-select').addEventListener('change', async e=>{
+        const cat = document.getElementById('category-select').value;
+        if(!e.target.value) return;
+        currentCSVData = await loadCSV(`${tableMapping[cat].folder}/${tableMapping[cat].files[e.target.value]}`);
+        const mls = document.getElementById('map-layer-select');
+        mls.innerHTML='<option value="default">Default Map</option>';
+        Object.keys(currentCSVData[0]).forEach(c=>{if(c!=='GEO_ID' && c!=='NAME' && !c.endsWith('_MOE')) mls.innerHTML+=`<option value="${c}">${c}</option>`;});
+        updateViz();
+    });
+
+    document.getElementById('map-layer-select').addEventListener('change', updateMapLayer);
+
+    // --- LOAD BUILDINGS & ADDRESSES ---
+    const bFiles = [
+        '1-9-26 Hun residential buildings with geoid p1.geojson',
+        '1-9-26 Hun residential buildings with geoid p2.geojson',
+        '1-9-26 Hun residential buildings with geoid p3.geojson',
+        '1-9-26 Hun residential buildings with geoid p4.geojson'
+    ];
+    for(const f of bFiles) { fetch(f).then(r=>r.json()).then(d=>allBuildings=allBuildings.concat(d.features)); }
+
+    const aFiles = ['Street_Address_Inside_City_LatLon_part1.geojson','Street_Address_Inside_City_LatLon_part2.geojson'];
+    for(const f of aFiles) { fetch(f).then(r=>r.json()).then(d=>allAddresses=allAddresses.concat(d.features)); }
+
+    initKPIs();
+
+    function updateMapLayer() {
+        const selectedCol = document.getElementById('map-layer-select').value;
+        const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
+        const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
+
+        bgLayer.eachLayer(layer => {
+            const props = layer.feature.properties;
+            const geoid = props.GEOIDFQ;
+            const row = currentCSVData.find(r => r.GEO_ID === geoid);
+            
+            let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
+            if (selectedCol !== 'default') {
+                const val = row?.[selectedCol] || 0;
+                style.fill = true;
+                style.fillColor = '#4a148c'; 
+                style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
+            }
+            if (highlightedIDs.includes(geoid)) {
+                style.color = '#FFFF00'; style.weight = 4; style.opacity = 1;
+            }
+            layer.setStyle(style);
+        });
+    }
+})();
 </script>
 </body>
 </html>
