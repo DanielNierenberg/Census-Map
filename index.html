@@ -182,7 +182,7 @@ const tableDenominatorMap = {
 try {
     const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
     L.geoJSON(cityData, { 
-        style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } 
+        style: { color: 'orange', weight: 2, fillOpacity: 0.2, interactive: false } 
     }).addTo(map);
 } catch (error) {
     console.error("Error loading city boundary:", error);
