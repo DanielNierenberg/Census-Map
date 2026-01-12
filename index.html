@@ -253,6 +253,7 @@ async function initKPIs() {
     kpiRaw.workers18B = await loadCSV('Totals/Total Non-remote workers 18 years and over.csv');  
 
     updateKPIs();  // initial KPI update
+    updateMapLayer(); // Refresh tooltips now that Population CSV is loaded
 }
 
     function updateKPIs() {
@@ -537,22 +538,31 @@ function updateMapLayer() {
         const geoid = props.GEOIDFQ;
         const row = currentCSVData.find(r => r.GEO_ID === geoid);
         
-        // --- TOOLTIP LOGIC START ---
-        // Clean up the name. If no CSV row exists, use the GeoJSON property.
-let displayName = props.NAMELSAD || "Unknown Block Group"; 
-if (row && row.NAME) {
-    const parts = row.NAME.split(';');
-    displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
-}
+    // --- TOOLTIP LOGIC START ---
+        // 1. Find the population row for this specific block group
+        const popRow = kpiRaw.pop ? kpiRaw.pop.find(r => r.GEO_ID === geoid) : null;
         
-        // Build the tooltip content
-        let tip = `${displayName}<br>GEO_ID: ${geoid}`;
+        // 2. Determine the Display Name (Priority: Population CSV Name > GeoJSON Property)
+        let displayName = "Unknown Block Group";
+        if (popRow && popRow.NAME) {
+            const parts = popRow.NAME.split(';');
+            displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : popRow.NAME;
+        } else {
+            displayName = props.NAMELSAD || "Unknown Block Group";
+        }
+
+        // 3. Build the tooltip content
+        let tip = `<strong>${displayName}</strong><br>GEO_ID: ${geoid}`;
+        
         if (selectedCol !== 'default' && row) {
+            // Show the currently selected census metric
             tip += `<br><strong>${selectedCol}:</strong> ${row[selectedCol]?.toLocaleString() || 0}`;
+        } else if (popRow) {
+            // Default view: Show Total Population from the CSV
+            tip += `<br><strong>Total Population:</strong> ${popRow.Total?.toLocaleString() || 0}`;
         }
         
-        // Bind the tooltip to the layer
-        layer.unbindTooltip(); // Clear old tooltip
+        layer.unbindTooltip();
         layer.bindTooltip(tip, { sticky: true, direction: "auto" });
         // --- TOOLTIP LOGIC END ---
 
