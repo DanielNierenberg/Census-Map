@@ -478,14 +478,70 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
         matches.forEach(f=>{
             const li = document.createElement('li');
             li.textContent = f.properties.Street_Address;
-            li.onclick = ()=>{
-                const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-                searchInput.value = f.properties.Street_Address;
-                suggestionsList.innerHTML='';
-                map.setView(coords,17);
-                if(currentMarker) map.removeLayer(currentMarker);
-                currentMarker = L.circleMarker(coords,{radius:10,color:'red'}).addTo(map);
-            };
+            li.onclick = () => {
+    const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+    const addressText = f.properties.Street_Address;
+    searchInput.value = addressText;
+    suggestionsList.innerHTML = '';
+    map.setView(coords, 15);
+
+    if (currentMarker) map.removeLayer(currentMarker);
+    currentMarker = L.circleMarker(coords, { radius: 8, color: 'red', fillOpacity: 1 }).addTo(map);
+
+    // Create the Radius UI Container
+    const container = document.createElement('div');
+    container.style.textAlign = 'center';
+    container.innerHTML = `
+        <div style="margin-bottom:8px;"><strong>${addressText}</strong></div>
+        <div style="margin-bottom:5px; font-size: 0.9em;">Enter radius in miles:</div>
+        <input type="number" id="inline-radius" step="0.1" value="1.0" style="width:60px; margin-bottom:10px;"><br>
+        <button id="inline-submit" style="cursor:pointer; background:var(--dark-blue); color:white; border:none; padding:5px 10px; border-radius:4px;">Submit Radius</button>
+        <button id="pop-cancel" style="cursor:pointer; background:#ccc; border:none; padding:5px 10px; border-radius:4px; margin-left:5px;">Cancel</button>
+    `;
+
+    // Handle Submit
+    container.querySelector('#inline-submit').onclick = () => {
+        const miles = container.querySelector('#inline-radius').value;
+        if (miles && !isNaN(miles)) {
+            const radiusKm = parseFloat(miles) * 1.60934;
+            // Note: Turf uses [lng, lat]
+            const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
+            const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
+
+            // Clear previous selections
+            drawnItems.clearLayers();
+            activeBlockGroup = null; 
+            currentShape = circleGeoJSON;
+
+            // Draw the circle on the map
+            L.geoJSON(circleGeoJSON, { 
+                style: { color: '#3388ff', weight: 2, fillOpacity: 0.2, dashArray: '5, 5' } 
+            }).addTo(drawnItems);
+
+            // Filter buildings that intersect the circle
+            const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+            document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+
+            // Show the purple building dots
+            buildingsLayer.clearLayers();
+            L.geoJSON(bResults, { 
+                pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 3 }),
+                style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } 
+            }).addTo(buildingsLayer);
+
+            // Refresh the dashboard
+            updateMapLayer();
+            updateKPIs();
+            updateViz();
+            map.closePopup();
+        }
+    };
+
+    // Handle Cancel
+    container.querySelector('#pop-cancel').onclick = () => map.closePopup();
+
+    currentMarker.bindPopup(container).openPopup();
+};
             suggestionsList.appendChild(li);
         });
     });
