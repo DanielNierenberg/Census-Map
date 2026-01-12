@@ -163,6 +163,7 @@ const tableDenominatorMap = {
     
     let bgLayer, currentCSVData = [], allBuildings = [], allAddresses = [], buildingCounts = {};
     let activeBlockGroup = null, chartInstance = null, currentMarker = null, currentShape = null;
+    let legend = L.control({position: 'bottomright'}); // Added legend variable
 
     const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
 
@@ -508,29 +509,47 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
 
     initKPIs();
 
-    function updateMapLayer() {
-        const selectedCol = document.getElementById('map-layer-select').value;
-        const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
-        const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
+function updateMapLayer() {
+    const selectedCol = document.getElementById('map-layer-select').value;
+    const max = (selectedCol !== 'default' && currentCSVData.length) ? Math.max(...currentCSVData.map(r => r[selectedCol] || 0)) : 0;
+    const highlightedIDs = (activeBlockGroup || currentShape) ? getSelectedIDs() : [];
 
-        bgLayer.eachLayer(layer => {
-            const props = layer.feature.properties;
-            const geoid = props.GEOIDFQ;
-            const row = currentCSVData.find(r => r.GEO_ID === geoid);
-            
-            let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
-            if (selectedCol !== 'default') {
-                const val = row?.[selectedCol] || 0;
-                style.fill = true;
-                style.fillColor = '#4a148c'; 
-                style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
+    // Remove existing legend if it exists
+    if (legend._map) { map.removeControl(legend); }
+
+    // Add new legend if a column is selected
+    if (selectedCol !== 'default' && max > 0) {
+        legend.onAdd = function() {
+            const div = L.DomUtil.create('div', 'info legend');
+            const grades = [0, max * 0.25, max * 0.5, max * 0.75];
+            div.innerHTML = `<strong>${selectedCol}</strong><br>`;
+            for (let i = 0; i < grades.length; i++) {
+                // Using your color #4a148c and your opacity logic
+                div.innerHTML += `<i style="background:#4a148c; opacity:${(grades[i] / max) || 0.1}"></i> ${Math.round(grades[i]).toLocaleString()}+<br>`;
             }
-            if (highlightedIDs.includes(geoid)) {
-                style.color = '#FFFF00'; style.weight = 4; style.opacity = 1;
-            }
-            layer.setStyle(style);
-        });
+            return div;
+        };
+        legend.addTo(map);
     }
+
+    bgLayer.eachLayer(layer => {
+        const props = layer.feature.properties;
+        const geoid = props.GEOIDFQ;
+        const row = currentCSVData.find(r => r.GEO_ID === geoid);
+        
+        let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
+        if (selectedCol !== 'default') {
+            const val = row?.[selectedCol] || 0;
+            style.fill = true;
+            style.fillColor = '#4a148c'; 
+            style.fillOpacity = val > 0 ? (val / max) * 0.8 : 0;
+        }
+        if (highlightedIDs.includes(geoid)) {
+            style.color = '#FFFF00'; style.weight = 4; style.opacity = 1;
+        }
+        layer.setStyle(style);
+    });
+}
 })();
 </script>
 </body>
