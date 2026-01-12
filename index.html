@@ -178,6 +178,16 @@ const tableDenominatorMap = {
 
     const bgData = await fetch('Huntsville_Block_Groups.geojson').then(r => r.json());
 
+// --- City Boundary Overlay ---
+try {
+    const cityData = await fetch('Boundary_City_Huntsville_poly.geojson').then(res => res.json());
+    L.geoJSON(cityData, { 
+        style: { color: 'orange', weight: 2, fillOpacity: 0.1, interactive: false } 
+    }).addTo(map);
+} catch (error) {
+    console.error("Error loading city boundary:", error);
+}
+
     function getSelectedIDs() {
         if (currentShape) {
             return bgData.features.filter(f => turf.booleanIntersects(f, currentShape)).map(f => f.properties.GEOIDFQ);
