@@ -524,7 +524,6 @@ function updateMapLayer() {
             const grades = [0, max * 0.25, max * 0.5, max * 0.75];
             div.innerHTML = `<strong>${selectedCol}</strong><br>`;
             for (let i = 0; i < grades.length; i++) {
-                // Using your color #4a148c and your opacity logic
                 div.innerHTML += `<i style="background:#4a148c; opacity:${(grades[i] / max) || 0.1}"></i> ${Math.round(grades[i]).toLocaleString()}+<br>`;
             }
             return div;
@@ -537,6 +536,25 @@ function updateMapLayer() {
         const geoid = props.GEOIDFQ;
         const row = currentCSVData.find(r => r.GEO_ID === geoid);
         
+        // --- TOOLTIP LOGIC START ---
+        // Clean up the name (e.g., "Block Group 1; Huntsville")
+        let displayName = "Unknown";
+        if (row && row.NAME) {
+            const parts = row.NAME.split(';');
+            displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
+        }
+        
+        // Build the tooltip content
+        let tip = `${displayName}<br>GEO_ID: ${geoid}`;
+        if (selectedCol !== 'default' && row) {
+            tip += `<br><strong>${selectedCol}:</strong> ${row[selectedCol]?.toLocaleString() || 0}`;
+        }
+        
+        // Bind the tooltip to the layer
+        layer.unbindTooltip(); // Clear old tooltip
+        layer.bindTooltip(tip, { sticky: true, direction: "auto" });
+        // --- TOOLTIP LOGIC END ---
+
         let style = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
         if (selectedCol !== 'default') {
             const val = row?.[selectedCol] || 0;
