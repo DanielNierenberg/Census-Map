@@ -165,7 +165,7 @@ const tableDenominatorMap = {
     let activeBlockGroup = null, chartInstance = null, currentMarker = null, currentShape = null;
     let legend = L.control({position: 'bottomright'}); // Added legend variable
 
-    const initialStyle = { color: 'black', weight: 1, fillOpacity: 0, fill: false };
+    const initialStyle = { color: 'black', weight: 1, fillOpacity: 0.1, fill: false };
 
     async function loadCSV(path) {
         const r = await fetch(path);
@@ -508,6 +508,7 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     for(const f of aFiles) { fetch(f).then(r=>r.json()).then(d=>allAddresses=allAddresses.concat(d.features)); }
 
     initKPIs();
+    updateMapLayer(); // Force the map to draw tooltips immediately
 
 function updateMapLayer() {
     const selectedCol = document.getElementById('map-layer-select').value;
@@ -537,12 +538,12 @@ function updateMapLayer() {
         const row = currentCSVData.find(r => r.GEO_ID === geoid);
         
         // --- TOOLTIP LOGIC START ---
-        // Clean up the name (e.g., "Block Group 1; Huntsville")
-        let displayName = "Unknown";
-        if (row && row.NAME) {
-            const parts = row.NAME.split(';');
-            displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
-        }
+        // Clean up the name. If no CSV row exists, use the GeoJSON property.
+let displayName = props.NAMELSAD || "Unknown Block Group"; 
+if (row && row.NAME) {
+    const parts = row.NAME.split(';');
+    displayName = parts.length >= 2 ? `${parts[0].trim()}, ${parts[1].trim()}` : row.NAME;
+}
         
         // Build the tooltip content
         let tip = `${displayName}<br>GEO_ID: ${geoid}`;
