@@ -552,14 +552,14 @@ function updateMapLayer() {
         }
 
         // 3. Build the tooltip content
-        let tip = `<strong>${displayName}</strong><br>GEO_ID: ${geoid}`;
+        let tip = `${displayName}<br>GEO_ID: ${geoid}`;
         
         if (selectedCol !== 'default' && row) {
             // Show the currently selected census metric
-            tip += `<br><strong>${selectedCol}:</strong> ${row[selectedCol]?.toLocaleString() || 0}`;
+            tip += `<br>${selectedCol}:${row[selectedCol]?.toLocaleString() || 0}`;
         } else if (popRow) {
             // Default view: Show Total Population from the CSV
-            tip += `<br><strong>Total Population:</strong> ${popRow.Total?.toLocaleString() || 0}`;
+            tip += `<br>Total Population ${popRow.Total?.toLocaleString() || 0}`;
         }
         
         layer.unbindTooltip();
