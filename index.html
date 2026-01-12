@@ -420,19 +420,32 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     const drawControl = new L.Control.Draw({ draw: { polyline:false, marker:false, circlemarker:false, polygon:true, rectangle:true, circle:true }, edit:false });
     map.addControl(drawControl);
 
-    map.on('draw:created', e => {
-        drawnItems.clearLayers();
-        drawnItems.addLayer(e.layer);
-        activeBlockGroup = null;
-        currentShape = (e.layer instanceof L.Circle) ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius()/1000, {units:'kilometers'}) : e.layer.toGeoJSON();
+map.on('draw:created', e => {
+    drawnItems.clearLayers();
+    drawnItems.addLayer(e.layer);
+    activeBlockGroup = null;
+    
+    currentShape = (e.layer instanceof L.Circle) 
+        ? turf.circle([e.layer.getLatLng().lng, e.layer.getLatLng().lat], e.layer.getRadius()/1000, {units:'kilometers'}) 
+        : e.layer.toGeoJSON();
 
-        buildingsLayer.clearLayers();
-        const bResults = allBuildings.filter(b=>turf.booleanIntersects(b, currentShape));
-        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
-        L.geoJSON(bResults, { style:{color:'#ff00ff', weight:1, fillOpacity:0.7} }).addTo(buildingsLayer);
+    buildingsLayer.clearLayers();
+    const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+    document.getElementById('count-display').innerText = bResults.length.toLocaleString();
 
-        updateMapLayer(); updateKPIs(); updateViz();
-    });
+    // The Red/Yellow Style for drawn shapes
+    L.geoJSON(bResults, { 
+        pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 3 }),
+        style: { 
+            color: '#FF0000',    // Red Outline
+            weight: 1, 
+            fillColor: '#FFFF00', // Yellow Fill
+            fillOpacity: 1 
+        } 
+    }).addTo(buildingsLayer);
+
+    updateMapLayer(); updateKPIs(); updateViz();
+});
 
     // --- MAP CONTROLS ---
     const clearBtn = L.control({position:'topright'});
@@ -527,42 +540,41 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     `;
 
     // Handle Submit
-    container.querySelector('#inline-submit').onclick = () => {
-        const miles = container.querySelector('#inline-radius').value;
-        if (miles && !isNaN(miles)) {
-            const radiusKm = parseFloat(miles) * 1.60934;
-            // Note: Turf uses [lng, lat]
-            const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
-            const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
+container.querySelector('#inline-submit').onclick = () => {
+    const miles = container.querySelector('#inline-radius').value;
+    if (miles && !isNaN(miles)) {
+        const radiusKm = parseFloat(miles) * 1.60934;
+        const center = [f.geometry.coordinates[0], f.geometry.coordinates[1]];
+        const circleGeoJSON = turf.circle(center, radiusKm, { units: 'kilometers' });
 
-            // Clear previous selections
-            drawnItems.clearLayers();
-            activeBlockGroup = null; 
-            currentShape = circleGeoJSON;
+        drawnItems.clearLayers();
+        activeBlockGroup = null; 
+        currentShape = circleGeoJSON;
 
-            // Draw the circle on the map
-            L.geoJSON(circleGeoJSON, { 
-                style: { color: '#3388ff', weight: 2, fillOpacity: 0.2, dashArray: '5, 5' } 
-            }).addTo(drawnItems);
+        L.geoJSON(circleGeoJSON, { 
+            style: { color: '#3388ff', weight: 2, fillOpacity: 0.2, dashArray: '5, 5' } 
+        }).addTo(drawnItems);
 
-            // Filter buildings that intersect the circle
-            const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
-            document.getElementById('count-display').innerText = bResults.length.toLocaleString();
+        const bResults = allBuildings.filter(b => turf.booleanIntersects(b, currentShape));
+        document.getElementById('count-display').innerText = bResults.length.toLocaleString();
 
-            // Show the purple building dots
-            buildingsLayer.clearLayers();
-            L.geoJSON(bResults, { 
-                pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 3 }),
-                style: { color: '#ff00ff', weight: 1, fillOpacity: 0.7 } 
-            }).addTo(buildingsLayer);
+        // The Magenta Style for search results
+        buildingsLayer.clearLayers();
+        L.geoJSON(bResults, { 
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 3 }),
+            style: { 
+                color: '#ff00ff',    // Magenta Outline
+                weight: 1, 
+                fillOpacity: 0.7     // Semi-transparent Magenta fill
+            } 
+        }).addTo(buildingsLayer);
 
-            // Refresh the dashboard
-            updateMapLayer();
-            updateKPIs();
-            updateViz();
-            map.closePopup();
-        }
-    };
+        updateMapLayer();
+        updateKPIs();
+        updateViz();
+        map.closePopup();
+    }
+};
 
     // Handle Cancel
     container.querySelector('#pop-cancel').onclick = () => map.closePopup();
