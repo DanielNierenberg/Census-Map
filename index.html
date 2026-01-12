@@ -44,11 +44,110 @@
         td { padding: 6px 8px; border-bottom: 1px solid #eee; }
         .info.legend { background: white; padding: 10px; line-height: 18px; color: #555; border: 1px solid #ccc; border-radius: 5px; }
         .info.legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
+        /* Container for the 'i' button */
+.info-icon {
+    position: relative;
+    cursor: help;
+    background: rgba(255, 255, 255, 0.2);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-family: serif; /* Makes the 'i' look more like an info icon */
+}
+
+.info-icon:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* The actual popup box */
+.info-tooltip {
+    display: none;
+    position: absolute;
+    top: 30px;
+    right: 0;
+    width: 340px;
+    background: white;
+    color: #333;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    z-index: 5000; /* Ensure it stays above the map and legend */
+    font-family: sans-serif;
+    line-height: 1.4;
+}
+
+.info-icon:hover .info-tooltip {
+    display: block;
+}
+
+.tooltip-title {
+    font-weight: bold;
+    color: var(--dark-blue);
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.info-tooltip p {
+    margin: 0 0 10px 0;
+    font-size: 0.8rem;
+}
+
+/* Tooltip Table Formatting */
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.7rem !important;
+}
+
+.info-table td {
+    padding: 4px 2px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+
+.info-table td:first-child {
+    color: #000;
+    width: 45%;
+}
     </style>
 </head>
 <body>
 
-<div id="banner"><h1>Huntsville ACS 2023 5-year Block Group Data</h1></div>
+<div id="banner">
+    <div style="flex: 1;"></div> 
+
+    <h1>Huntsville ACS 2023 5-year Block Group Data</h1>
+
+    <div style="flex: 1; display: flex; justify-content: flex-end; padding-right: 20px;">
+        <div class="info-icon">
+            ⓘ
+            <div class="info-tooltip">
+                <div class="tooltip-title">Methodology & Calculations</div>
+                <p>Values are calculated using <strong>proportional apportionment</strong>. If a selection covers a portion of a Block Group's residential buildings, that same percentage of census data is apportioned to the total. Medians are calculated as weighted averages.</p>
+                
+                <div class="tooltip-title" style="margin-top:10px; border-top: 1px solid #eee; padding-top:10px;">Calculation Denominators</div>
+                <p style="font-size: 0.75rem; margin-bottom: 8px; color: #666;">Percentages are based on these "100%" universes:</p>
+                
+                <table class="info-table">
+                    <tr><td><strong>Total Population</strong></td><td>Race, Age, Gender</td></tr>
+                    <tr><td><strong>Total Households</strong></td><td>Income, Internet, Language, Family Size, SNAP</td></tr>
+                    <tr><td><strong>Population 16+</strong></td><td>Employment Status</td></tr>
+                    <tr><td><strong>Population 18+</strong></td><td>Education, Poverty, Veterans</td></tr>
+                    <tr><td><strong>Non-Inst. Pop</strong></td><td>Health Insurance</td></tr>
+                    <tr><td><strong>Total Housing Units</strong></td><td>Year Built</td></tr>
+                    <tr><td><strong>Occupied Units</strong></td><td>Vehicle Availability</td></tr>
+                    <tr><td><strong>Owner-Occupied</strong></td><td>Home Value, Mobile Homes</td></tr>
+                    <tr><td><strong>Workers 18+</strong></td><td>Transportation</td></tr>
+                    <tr><td><strong>Non-Remote Workers</strong></td><td>Travel Time to Work</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="main-container">
     <div id="map-container">
