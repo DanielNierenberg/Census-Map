@@ -453,6 +453,19 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
     };
     expandBtn.addTo(map);
 
+    // INSERT THE HOME BUTTON CODE HERE
+    const homeBtn = L.control({position: 'topright'});
+    homeBtn.onAdd = () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        div.innerHTML = '<a href="#" title="Home" style="background:white;width:30px;height:30px;display:flex;align-items:center;justify-content:center;text-decoration:none;">🏠</a>';
+        div.onclick = (e) => { 
+            e.preventDefault(); 
+            map.setView([34.7304, -86.5861], 12); 
+        };
+        return div;
+    };
+    homeBtn.addTo(map);
+    
     // --- SEARCH ---
     const searchInput = document.getElementById('address-search');
     const suggestionsList = document.getElementById('suggestions');
