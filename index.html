@@ -423,9 +423,42 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
             }
         });
 
-        const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
-        return { param: col, val: Math.round(totalVal), pct: pct.toFixed(1) };
-    }).sort((a,b) => b.val - a.val);
+const sums = cols.map(col => {
+    let totalVal = 0;
+    let totalDenom = 0;
+
+    ids.forEach(geoid => {
+        const row = currentCSVData.find(r => r.GEO_ID === geoid);
+        const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
+        if (!row || !denomRow) return;
+
+        const weight = getBGWeight(geoid);
+        const val = Number(row[col] ?? 0);
+        const denom = Number(denomRow.Total ?? 0);
+
+        if (denom > 0) {
+            totalVal += val * weight;
+            totalDenom += denom * weight;
+        }
+    });
+
+    // --- NEW LOGIC STARTS HERE ---
+    const rawPct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
+    
+    // 1. Determine decimal places for percentage
+    const formattedPct = (rawPct > 0 && rawPct < 1) ? rawPct.toFixed(2) : rawPct.toFixed(1);
+
+    // 2. Fix the "0" display by showing 1 decimal for counts less than 1
+    const displayVal = (totalVal > 0 && totalVal < 1) ? totalVal.toFixed(1) : Math.round(totalVal);
+
+    return { 
+        param: col, 
+        val: displayVal, 
+        pct: formattedPct 
+    };
+    // --- NEW LOGIC ENDS HERE ---
+    
+}).sort((a,b) => b.val - a.val);
 
     // --- Update HTML table ---
     const tbody = document.querySelector('#data-table tbody');
@@ -440,7 +473,7 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
         data: {
             labels: sums.map(s => s.param),
             datasets: [{
-                label: 'Apportioned Count',
+                label: 'Metric Count',
                 data: sums.map(s => s.val),
                 backgroundColor: '#002f5d'
             }]
