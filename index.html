@@ -88,19 +88,14 @@
 
 <div id="banner">
     <h1>Huntsville ACS 2023 5-year Block Group Data</h1>
-    <a href="#" class="guide-btn" id="guide-btn">Dashboard Guide</a>
+    <a 
+        href="Census Dashboard Guide.pdf"
+        target="_blank"
+        class="guide-btn"
+    >
+        Dashboard Guide
+    </a>
 </div>
-
-<div id="pdf-container" style="width: 100%; height: 600px; display: none; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px;">
-    <!-- Close button -->
-    <div style="text-align: right; margin-bottom: 5px;">
-        <button id="close-pdf" style="padding: 4px 8px; font-size: 0.8em; cursor: pointer;">Close PDF</button>
-    </div>
-
-    <!-- PDF iframe -->
-    <iframe id="pdf-frame" src="" width="100%" height="100%" style="border: none;"></iframe>
-</div>
-
 
 
 <div id="main-container">
@@ -741,32 +736,6 @@ function updateMapLayer() {
     });
 }
 })();
-    // Show PDF in iframe when button is clicked
-document.getElementById('guide-btn').addEventListener('click', function(e) {
-    e.preventDefault();
-    const pdfContainer = document.getElementById('pdf-container');
-    const pdfFrame = document.getElementById('pdf-frame');
-
-    // Set the PDF URL
-    pdfFrame.src = 'Census Dashboard Guide.pdf';
-
-    // Show the container
-    pdfContainer.style.display = 'block';
-
-    // Scroll to PDF
-    pdfContainer.scrollIntoView({ behavior: 'smooth' });
-});
-document.getElementById('close-pdf').addEventListener('click', () => {
-    const pdfContainer = document.getElementById('pdf-container');
-    const pdfFrame = document.getElementById('pdf-frame');
-
-    // Hide the PDF container
-    pdfContainer.style.display = 'none';
-
-    // Clear the PDF src so it stops loading
-    pdfFrame.src = '';
-});
-
 </script>
 </body>
 </html>
