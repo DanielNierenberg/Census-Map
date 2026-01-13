@@ -368,7 +368,7 @@ async function initKPIs() {
 function updateViz() {
     if (!currentCSVData.length) return;
 
-    const ids = getSelectedIDs(); 
+    const ids = getSelectedIDs(); // selected GEOIDs
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
     if (!denomKey) {
@@ -376,19 +376,29 @@ function updateViz() {
         return;
     }
     
-    const denomNameMap = {
-        hh: "Households", pop: "Population", pop16: "Population 16+",
-        pop18: "Population 18+", popNonInst: "Non-Institutionalized Population",
-        housing: "Housing Units", owners: "Population in Owner-Occupied Units",
-        owners2: "Owner-Occupied Units", workers18: "Workers 18+",
-        workers18B: "Workers 18+ (non-remote)", occupiedHH: "Occupied Housing Units"
-    };
+    // --- Set dynamic column title ---
+const denomNameMap = {
+    hh: "Households",
+    pop: "Population",
+    pop16: "Population 16+",
+    pop18: "Population 18+",
+    popNonInst: "Non-Institutionalized Population",
+    housing: "Housing Units",
+    owners: "Population in Owner-Occupied Units",
+    owners2: "Owner-Occupied Units",
+    workers18: "Workers 18+",
+    workers18B: "Workers 18+ (non-remote)",
+    occupiedHH: "Occupied Housing Units"
+};
 
-    const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
-    tableHeaderParam.innerText = selectedTable || "Census Parameter";
+// First column
+const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
+tableHeaderParam.innerText = selectedTable || "Census Parameter";
 
-    const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
-    tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
+// Second column
+const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
+tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
+
 
     const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
 
@@ -399,43 +409,39 @@ function updateViz() {
         ids.forEach(geoid => {
             const row = currentCSVData.find(r => r.GEO_ID === geoid);
             const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
-            if (!row || !denomRow) return;
+
+            if (!row || !denomRow) return; // skip missing data
 
             const weight = getBGWeight(geoid);
             const val = Number(row[col] ?? 0);
             const denom = Number(denomRow.Total ?? 0);
 
+            // Only add weighted values if denominator > 0
             if (denom > 0) {
                 totalVal += val * weight;
                 totalDenom += denom * weight;
             }
         });
 
-        const rawPct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
-        const formattedPct = (rawPct > 0 && rawPct < 1) ? rawPct.toFixed(2) : rawPct.toFixed(1);
-        const displayVal = (totalVal > 0 && totalVal < 1) ? totalVal.toFixed(1) : Math.round(totalVal);
+        const pct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
+        return { param: col, val: Math.round(totalVal), pct: pct.toFixed(1) };
+    }).sort((a,b) => b.val - a.val);
 
-        return { 
-            param: col, 
-            val: displayVal, 
-            rawVal: totalVal, // Hidden helper for sorting
-            pct: formattedPct 
-        };
-    }).sort((a, b) => b.rawVal - a.rawVal);
-
+    // --- Update HTML table ---
     const tbody = document.querySelector('#data-table tbody');
     tbody.innerHTML = sums.map(s => 
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
 
+    // --- Update Bar Chart ---
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
             labels: sums.map(s => s.param),
             datasets: [{
-                label: 'Apportioned Count',
-                data: sums.map(s => s.rawVal),
+                label: 'Parameter Count',
+                data: sums.map(s => s.val),
                 backgroundColor: '#002f5d'
             }]
         },
@@ -455,6 +461,7 @@ function updateViz() {
         }
     });
 }
+
 
 
     // --- DRAWING HANDLERS ---
