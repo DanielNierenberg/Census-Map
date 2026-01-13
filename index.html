@@ -11,37 +11,41 @@
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background-color: var(--light-gray); overflow: hidden; }
 
     /* ===== BANNER STYLES (REPLACE OLD ONES) ===== */
-    #banner {
-        height: 5%;
-        width: 100%;
-        background: var(--dark-blue);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 15px;
-        box-sizing: border-box;
-    }
+  #banner {
+    height: 5%;
+    width: 100%;
+    background: var(--dark-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* center everything horizontally */
+    padding: 0 15px;
+    box-sizing: border-box;
+    gap: 15px; /* space between title and button */
+}
 
-    #banner h1 {
-        font-size: 1.2rem;
-        margin: 0;
-    }
+#banner h1 {
+    font-size: 1.2rem;
+    margin: 0;
+}
 
-    .guide-btn {
-        background: #1e88e5;
-        color: white;
-        text-decoration: none;
-        font-size: 0.75rem;
-        font-weight: bold;
-        padding: 6px 12px;
-        border-radius: 4px;
-        transition: background 0.2s ease;
-    }
+.guide-btn {
+    background: #1e88e5;
+    color: white;
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 6px 12px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+    /* optional: add a little margin-left for extra spacing */
+    margin-left: 10px;
+}
 
-    .guide-btn:hover {
-        background: #1565c0;
-    }
+.guide-btn:hover {
+    background: #1565c0;
+}
+
     /* ===== END BANNER STYLES ===== */
 
     /* keep ALL your existing CSS below this */
