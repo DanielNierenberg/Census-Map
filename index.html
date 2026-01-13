@@ -368,7 +368,7 @@ async function initKPIs() {
 function updateViz() {
     if (!currentCSVData.length) return;
 
-    const ids = getSelectedIDs(); // selected GEOIDs
+    const ids = getSelectedIDs(); 
     const selectedTable = document.getElementById('table-select').value;
     const denomKey = tableDenominatorMap[selectedTable];
     if (!denomKey) {
@@ -376,29 +376,19 @@ function updateViz() {
         return;
     }
     
-    // --- Set dynamic column title ---
-const denomNameMap = {
-    hh: "Households",
-    pop: "Population",
-    pop16: "Population 16+",
-    pop18: "Population 18+",
-    popNonInst: "Non-Institutionalized Population",
-    housing: "Housing Units",
-    owners: "Population in Owner-Occupied Units",
-    owners2: "Owner-Occupied Units",
-    workers18: "Workers 18+",
-    workers18B: "Workers 18+ (non-remote)",
-    occupiedHH: "Occupied Housing Units"
-};
+    const denomNameMap = {
+        hh: "Households", pop: "Population", pop16: "Population 16+",
+        pop18: "Population 18+", popNonInst: "Non-Institutionalized Population",
+        housing: "Housing Units", owners: "Population in Owner-Occupied Units",
+        owners2: "Owner-Occupied Units", workers18: "Workers 18+",
+        workers18B: "Workers 18+ (non-remote)", occupiedHH: "Occupied Housing Units"
+    };
 
-// First column
-const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
-tableHeaderParam.innerText = selectedTable || "Census Parameter";
+    const tableHeaderParam = document.querySelector('#data-table th:nth-child(1)');
+    tableHeaderParam.innerText = selectedTable || "Census Parameter";
 
-// Second column
-const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
-tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
-
+    const tableHeaderPct = document.querySelector('#data-table th:nth-child(2)');
+    tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
 
     const cols = Object.keys(currentCSVData[0]).filter(c => c !== 'GEO_ID' && c !== 'NAME' && !c.endsWith('_MOE'));
 
@@ -409,72 +399,43 @@ tableHeaderPct.innerText = `% of ${denomNameMap[denomKey] || denomKey}`;
         ids.forEach(geoid => {
             const row = currentCSVData.find(r => r.GEO_ID === geoid);
             const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
-
-            if (!row || !denomRow) return; // skip missing data
+            if (!row || !denomRow) return;
 
             const weight = getBGWeight(geoid);
             const val = Number(row[col] ?? 0);
             const denom = Number(denomRow.Total ?? 0);
 
-            // Only add weighted values if denominator > 0
             if (denom > 0) {
                 totalVal += val * weight;
                 totalDenom += denom * weight;
             }
         });
 
-const sums = cols.map(col => {
-    let totalVal = 0;
-    let totalDenom = 0;
+        const rawPct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
+        const formattedPct = (rawPct > 0 && rawPct < 1) ? rawPct.toFixed(2) : rawPct.toFixed(1);
+        const displayVal = (totalVal > 0 && totalVal < 1) ? totalVal.toFixed(1) : Math.round(totalVal);
 
-    ids.forEach(geoid => {
-        const row = currentCSVData.find(r => r.GEO_ID === geoid);
-        const denomRow = kpiRaw[denomKey]?.find(r => r.GEO_ID === geoid);
-        if (!row || !denomRow) return;
+        return { 
+            param: col, 
+            val: displayVal, 
+            rawVal: totalVal, // Hidden helper for sorting
+            pct: formattedPct 
+        };
+    }).sort((a, b) => b.rawVal - a.rawVal);
 
-        const weight = getBGWeight(geoid);
-        const val = Number(row[col] ?? 0);
-        const denom = Number(denomRow.Total ?? 0);
-
-        if (denom > 0) {
-            totalVal += val * weight;
-            totalDenom += denom * weight;
-        }
-    });
-
-    // --- NEW LOGIC STARTS HERE ---
-    const rawPct = totalDenom ? (totalVal / totalDenom) * 100 : 0;
-    
-    // 1. Determine decimal places for percentage
-    const formattedPct = (rawPct > 0 && rawPct < 1) ? rawPct.toFixed(2) : rawPct.toFixed(1);
-
-    // 2. Fix the "0" display by showing 1 decimal for counts less than 1
-    const displayVal = (totalVal > 0 && totalVal < 1) ? totalVal.toFixed(1) : Math.round(totalVal);
-
-    return { 
-        param: col, 
-        val: displayVal, 
-        pct: formattedPct 
-    };
-    // --- NEW LOGIC ENDS HERE ---
-    
-}).sort((a,b) => b.val - a.val);
-
-    // --- Update HTML table ---
     const tbody = document.querySelector('#data-table tbody');
     tbody.innerHTML = sums.map(s => 
         `<tr><td>${s.param}</td><td>${s.val.toLocaleString()} (${s.pct}%)</td></tr>`
     ).join('');
 
-    // --- Update Bar Chart ---
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(document.getElementById('barChart'), {
         type: 'bar',
         data: {
             labels: sums.map(s => s.param),
             datasets: [{
-                label: 'Metric Count',
-                data: sums.map(s => s.val),
+                label: 'Apportioned Count',
+                data: sums.map(s => s.rawVal),
                 backgroundColor: '#002f5d'
             }]
         },
@@ -494,7 +455,6 @@ const sums = cols.map(col => {
         }
     });
 }
-
 
 
     // --- DRAWING HANDLERS ---
